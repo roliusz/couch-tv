@@ -15,7 +15,8 @@
 //  - Reduce Motion (Android TV's "Remove animations"): no movement, focus changes at once, a press
 //    brightens, and the launch and coming back are fades.
 //
-// On top of focus: a bump at the end of a row, a press-in on OK, the launch zoom, the coming-back
+// On top of focus: a bump at the end of a row, a press-in on OK (held while an app opens behind a
+// fade to black), the coming-back
 // fade-up, More apps growing out of the dock, and the glass clock gliding between scenes and
 // rolling its digits.
 // In mock mode (?mock=1) M turns the layer on and off to compare, R tries Reduce Motion;
@@ -321,7 +322,7 @@
   document.addEventListener("keyup", function (e) { if (isOk(e)) pressOut(); }, true);
   window.addEventListener("blur", pressOut);
 
-  // ---------------------------------------------------------------- launch: zoom into the app
+  // ---------------------------------------------------------------- launch: pressed, then fade to black
   var veil = document.createElement("div");
   veil.className = "motion-veil";
   document.body.appendChild(veil);
@@ -339,23 +340,9 @@
     var gone = false, fire = function () { if (!gone) { gone = true; go(); } };
     requestAnimationFrame(function () { setTimeout(fire, 0); });
     setTimeout(fire, 50);
-    if (calm()) return;                                          // Reduce Motion: just the fade
+    // No zoom: the item stays pressed in while the screen fades to black, for apps and Keep
+    // watching alike
     if (pressedEl) { clearTimeout(pressTimer); pressedEl = null; }
-    var face = el.querySelector(".face") || el, r = face.getBoundingClientRect();
-    var ghost = face.cloneNode(true);
-    ghost.classList.add("motion-ghost");
-    var cs = getComputedStyle(face);
-    ghost.style.cssText += ";left:" + r.left + "px;top:" + r.top + "px;width:" + r.width + "px;height:" + r.height + "px" +
-      ";border-radius:" + cs.borderRadius + ";background-color:" + cs.backgroundColor + ";overflow:hidden;transform:none";
-    document.body.appendChild(ghost);
-    var dx = innerWidth / 2 - (r.left + r.width / 2), dy = innerHeight / 2 - (r.top + r.height / 2);
-    // expand towards filling the screen, like a tvOS app opening from its icon
-    var grow = Math.max(innerWidth / r.width, innerHeight / r.height);
-    ghost.animate([
-      { translate: "0 0", scale: "1", opacity: 1 },
-      { translate: dx + "px " + dy + "px", scale: String(grow), opacity: 0 }
-    ], { duration: 420, easing: "cubic-bezier(0.4, 0, 0.2, 1)", fill: "forwards" })
-      .onfinish = function () { ghost.remove(); };
   }
   function abort() { if (launching) back(); }
 
