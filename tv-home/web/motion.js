@@ -16,7 +16,8 @@
 //    brightens, and the launch and coming back are fades.
 //
 // On top of focus: a bump at the end of a row, a press-in on OK, the launch zoom, the coming-back
-// fade-up, and the glass clock gliding between scenes and rolling its digits.
+// fade-up, More apps growing out of the dock, and the glass clock gliding between scenes and
+// rolling its digits.
 // In mock mode (?mock=1) M turns the layer on and off to compare, R tries Reduce Motion;
 // ?motion=0 starts with the layer off, ?calm=1 with Reduce Motion on.
 (function () {
@@ -395,6 +396,35 @@
     window.tv.resume = function () { resume.apply(this, arguments); back(); };
   }
   window.tvMotion = { launch: launch, abort: abort, back: back };
+
+  // ---------------------------------------------------------------- More apps: the dock grows
+  // Opening More apps (and closing it) redraws the dock with more rows. The glass grows or shrinks
+  // to its new height (anchored at the bottom, so it rises), and the icons fade up row by row. The
+  // glass is never clipped or faded on the way: Chrome would stop it seeing what is behind it.
+  var dock = document.getElementById("grid"), dockH = null, dockOpen = root.classList.contains("expanded");
+  function regrow(from, to) {
+    var rows = {}, n = 0;
+    [].forEach.call(dock.children, function (el) {
+      var top = el.offsetTop;
+      if (!(top in rows)) rows[top] = n++;
+      if (calm()) return;
+      el.animate([{ opacity: 0, translate: "0 0.75rem" }, { opacity: 1, translate: "0 0" }],
+        { duration: 360, delay: 80 + rows[top] * 45, easing: EASE, fill: "backwards" });
+    });
+    if (calm() || from === to) return;
+    // the rows stay pinned to the bottom while the top edge moves, so the list is uncovered upwards
+    dock.style.overflow = "hidden"; dock.style.alignContent = "end";
+    var a = dock.animate([{ height: from + "px" }, { height: to + "px" }], { duration: 460, easing: EASE });
+    a.onfinish = a.oncancel = function () { dock.style.overflow = ""; dock.style.alignContent = ""; };
+  }
+  if (dock) {
+    new MutationObserver(function () {
+      var open = root.classList.contains("expanded"), h = dock.offsetHeight;
+      if (dockH !== null && open !== dockOpen && layer()) regrow(dockH, h);
+      dockH = h; dockOpen = open;
+    }).observe(dock, { childList: true });
+    addEventListener("resize", function () { dockH = dock.offsetHeight; });
+  }
 
   // ---------------------------------------------------------------- the glass clock
   // Scene change: the outgoing and incoming clocks travel together, so it reads as one clock

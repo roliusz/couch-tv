@@ -75,7 +75,6 @@ html.siding .side-panel {
 .clock, .shelf-head, .np > *, .dock-ic { transition: opacity 360ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 html.siding .clock, html.siding .shelf-head, html.siding .np > *, html.siding .dock-ic { opacity: 0.55; }
 /* the cards' bottom band blurs too, so they dim under a dark veil rather than by fading */
-.theme-night .ncard::after { transition: box-shadow 240ms var(--ease), background 360ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 html.siding .theme-night .ncard::after, html.siding.theme-night .ncard::after { background: rgba(0, 0, 0, 0.45); }
 
 .side-rows { display: flex; flex-direction: column; gap: 0.125rem; }
