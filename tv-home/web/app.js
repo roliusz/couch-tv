@@ -27,9 +27,8 @@
   // read in readConfig() once the page starts (mock.js fills them in for previews). See docs/CONFIG.md.
   var CFG = {}, HOME = {}, TVCFG = {}, QUICK = [];
   var WXCFG = { lat: -33.8688, lon: 151.2093, place: "Sydney", timezone: "Australia/Sydney" };
-  var QUICK_ALL = ["sleep", "picture", "look", "input"];
-  // The look: ?theme= for a preview, then Home settings (or the Look button) on this TV, then home.look.
-  var THEME = "night", NIGHT = true, CLOCK24 = false;
+  var QUICK_ALL = ["sleep", "picture", "input"];
+  var CLOCK24 = false;
   // Home settings made on this TV with the gear tile (see "home settings" below). They win over
   // config.js. ST is the saved object; the rest are read from it in readConfig().
   var ST = {}, WX_SHOW = true, WX_F = false, WX_EVERY = 30, HIDDEN_TV = [];
@@ -73,7 +72,7 @@
     "com.limelight", "com.google.android.play.games", "com.google.android.videos"
   ];
   var GRID_COLS = 12, GRID_MAX = 24;
-  var DOCK_APPS = 10;   // Night: apps in the dock before Settings and More apps (home.dock_size)
+  var DOCK_APPS = 11;   // apps in the dock before More apps (home.dock_size); 11 + More spans the Keep watching row
   var SETTINGS_PKG = "com.android.tv.settings";
   // The Play Store: always the first tile of More apps, never in the dock's order.
   var STORE_PKG = "com.android.vending";
@@ -150,7 +149,7 @@
   }
 
   // Which wins, lowest first: the defaults here, config.js (config.json), then Home settings made on
-  // this TV (kept by the bridge too when there is one), then ?theme= for a preview. docs/CONFIG.md.
+  // this TV (kept by the bridge too when there is one), then preview settings in the address. docs/CONFIG.md.
   function readConfig() {
     CFG = window.COUCH_CONFIG || {};
     HOME = CFG.home || {};
@@ -167,12 +166,9 @@
     // no "quick" from an older bridge: the sleep timer, and the picture switch where the TV has one
     QUICK = (Array.isArray(ST.quick) ? ST.quick : TVCFG.quick || ["sleep", "picture"])
       .filter(function (q, i, a) { return QUICK_ALL.indexOf(q) >= 0 && a.indexOf(q) === i; });
-    THEME = (Q.match(/[?&]theme=([a-z]+)/) || [])[1] || lookSetting();
-    if (THEME !== "classic") THEME = "night";
-    NIGHT = THEME === "night";
-    document.documentElement.classList.toggle("theme-night", NIGHT);
-    GRID_COLS = NIGHT ? 12 : 8;
-    DOCK_APPS = Math.max(1, Math.min(10, parseInt(HOME.dock_size, 10) || 10));
+    document.documentElement.classList.add("theme-night");   // fork: the Night look is the only look
+    GRID_COLS = 12;
+    DOCK_APPS = Math.max(1, Math.min(11, parseInt(HOME.dock_size, 10) || 11));
     CLOCK24 = (ST.clock || HOME.clock) === "24h";
     (Array.isArray(HOME.hide_packages) ? HOME.hide_packages : []).forEach(function (p) {
       if (typeof p === "string" && HIDDEN.indexOf(p) < 0) HIDDEN.push(p);
@@ -189,7 +185,6 @@
     setPeople(localPeopleOrder(people, OFFLINE));
     newApps = kept("tvhome.apps.new") || [];
   }
-  function lookSetting() { return ST.look || kept("tvhome.look") || HOME.look || "night"; }
 
   // ---------------- helpers ----------------
   function esc(v) { return String(v == null ? "" : v).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
@@ -246,63 +241,7 @@
     return window.MOCK_ICON ? window.MOCK_ICON(pkg) : null;
   }
 
-  // ---------------- the photo, the clock and the big title ----------------
-  // Free Creative Commons photos (backgrounds/CREDITS.md), in the order they rotate.
-  var PHOTOS = [
-    { file: "tessellated-pavement", place: "Tessellated Pavement, Tasmania", by: "JJ Harrison" },
-    { file: "grose-valley", place: "Grose Valley, Blue Mountains", by: "Diliff" },
-    { file: "albury-storm", place: "Storm at sunset, Albury", key: "photo_albury", by: "Thennicke" },
-    { file: "aresquiers-beach", place: "Aresquiers beach, France", key: "photo_aresquiers", by: "Christian Ferrer" },
-    { file: "vang-vieng-sunset", place: "Vang Vieng, Laos", by: "Basile Morin" }
-  ];
-  var PHOTO_MS = 90000;
-  var photo = 0, photoTimer = null, bgShown = null, bgLayer = 0, bgTicket = 0;
-
-  function photoForHour(h) {   // sunrise in the morning, green by day, sunsets in the evening
-    if (h >= 5 && h < 9) return 0;
-    if (h >= 9 && h < 13) return 1;
-    if (h >= 13 && h < 17) return 2;
-    if (h >= 17 && h < 19) return 3;
-    if (h >= 19 && h < 22) return 5;
-    return 4;
-  }
-
-  function setBg(url, isShow) {
-    if (!url || url === bgShown) return;
-    var ticket = ++bgTicket;   // only the latest request may land
-    var pre = new Image();
-    pre.onload = function () {
-      if (ticket !== bgTicket) return;
-      var box = $("bg");
-      while (box.children.length < 2) { var im = document.createElement("img"); im.alt = ""; box.appendChild(im); }
-      var next = box.children[bgLayer = 1 - bgLayer], prev = box.children[1 - bgLayer];
-      next.src = url;
-      next.classList.toggle("show", !!isShow);
-      next.classList.add("on");
-      prev.classList.remove("on");
-      bgShown = url;
-    };
-    pre.src = url;
-  }
-
-  // Classic: the household's own photos (Home settings) when there are any, else the five above.
-  function classicPhotos() {
-    var own = ownScenes().filter(function (s) { return sceneState().off.indexOf(s.id) < 0; });
-    if (!own.length) return PHOTOS;
-    return own.map(function (s) { return { src: s.src, place: t("scene_photo", { n: s.n }), by: "" }; });
-  }
-
-  function showPhoto() {
-    if (NIGHT) { $("place").textContent = ""; return; }   // the scenes carry their own photos
-    var list = classicPhotos(), p = list[photo % list.length];
-    setBg(p.src || "backgrounds/" + p.file + ".jpg", false);
-    $("place").textContent = (p.key ? t(p.key) : p.place) + (p.by ? "  ·  " + t("photo_by", { by: p.by }) : "");
-  }
-
-  function nextPhoto() {
-    photo = (photo + 1) % classicPhotos().length;
-    if (zone !== "shelf") showPhoto();
-  }
+  // ---------------- the clock ----------------
 
   // Open-Meteo gives Celsius; Fahrenheit is worked out here when Home settings asks for it.
   function tempText(c) { return WX_F ? Math.round(c * 9 / 5 + 32) + "°F" : c + "°"; }
@@ -313,15 +252,17 @@
     var mm = (m < 10 ? "0" : "") + m;
     var hm = CLOCK24 ? (h < 10 ? "0" : "") + h + ":" + mm : (h % 12 || 12) + ":" + mm;
     $("time").innerHTML = hm + (CLOCK24 ? "" : "<small>" + esc(h < 12 ? t("am") : t("pm")) + "</small>");
+    sideTime = hm + (CLOCK24 ? "" : " " + (h < 12 ? t("am") : t("pm")));
+    if (zone === "side") renderSide();
     var loc = window.I18N ? window.I18N.locale() : "en-AU";
     var day = d.toLocaleDateString(loc, { weekday: "long", day: "numeric", month: "long" }).replace(",", "");
     day = day.charAt(0).toUpperCase() + day.slice(1);   // "lunes 27 de octubre" starts a line on screen
-    var w = NIGHT && WX_SHOW && data.weather && data.weather.temp != null ? data.weather : null;
+    var w = WX_SHOW && data.weather && data.weather.temp != null ? data.weather : null;
     $("date").innerHTML = '<span class="dline">' + esc(day) + (w ? '<span class="wx">' + wxIcon(w) + esc(tempText(w.temp)) +
       '<span class="ww"> ' + esc(wxText(w)) + "</span></span>" : "") + "</span>";
     fitDate();
     document.body.classList.toggle("night", h >= 21 || h < 6);
-    if (NIGHT) glassClock(hm);
+    glassClock(hm);
     if (quickReady) renderQuick();
   }
 
@@ -454,7 +395,7 @@
   // room: first it centres in the space left, then drops the weather's words, then the weather.
   function fitDate() {
     var d = $("date"), line = d.firstChild;
-    if (!NIGHT || !line || !line.getBoundingClientRect) return;
+    if (!line || !line.getBoundingClientRect) return;
     d.style.left = ""; d.style.right = "";
     d.classList.remove("tight", "tighter");
     var b = line.getBoundingClientRect(), rem = innerWidth / 120;
@@ -475,7 +416,7 @@
   // The bridge's reading for the place in config.json, or straight from Open-Meteo with no bridge
   // or when Home settings chose another place. Hidden when Home settings switched the weather off.
   function refreshWeather() {
-    if (!NIGHT || !WX_SHOW) return Promise.resolve();
+    if (!WX_SHOW) return Promise.resolve();
     var direct = OFFLINE || !!(ST.place && isFinite(ST.place.lat));
     return (direct ? weatherDirect() : api("GET", "/api/weather")).then(function (j) { data.weather = j; clock(); }, function () {});
   }
@@ -494,17 +435,9 @@
     });
   }
 
-  function hero(it) {
-    var el = $("hero");
-    if (!it) { el.classList.remove("on"); return; }
-    $("hero-title").textContent = it.title;
-    $("hero-sub").textContent = subtitle(it);
-    el.classList.add("on");
-  }
-
   // ---------------- quick buttons: from tvs[].quick in config.json, in that order ----------------
-  // sleep: the sleep timer. picture: flip between the TV's two picture modes. look: Night scenes or
-  // Classic. input: the TV's input list. A button that cannot work right now is left out (no bridge
+  // sleep: the sleep timer. picture: flip between the TV's two picture modes. input: the TV's
+  // input list. (fork: there is one look, so no look button.) A button that cannot work right now is left out (no bridge
   // for the sleep timer, a TV with no picture setting, an input list nobody can open).
   var SLEEP_CHOICES = [15, 30, 60, 90, 0];   // 0 = off
   // picture mode only exists where the bridge says this TV supports it
@@ -529,7 +462,6 @@
     return QUICK.filter(function (q) {
       if (q === "sleep") return !OFFLINE;
       if (q === "picture") return !OFFLINE && picShown;
-      if (q === "look") return true;
       if (q === "input") return !OFFLINE || nativeInputs();
       return false;
     });
@@ -556,19 +488,18 @@
     vis.forEach(function (q) {
       var el = $("q-" + q);
       if (q === "sleep") {
-        el.innerHTML = ICONS.moon + "<span>" + esc(m ? t(NIGHT ? "off_in_night" : "off_in", { m: m }) : t("sleep_timer")) + "</span>";
+        el.innerHTML = ICONS.moon + "<span>" + esc(m ? t("off_in_night", { m: m }) : t("sleep_timer")) + "</span>";
         el.classList.toggle("set", !!m);
       } else if (q === "picture") {
         el.innerHTML = ICONS.picture + "<span>" + esc(picLabel()) + "</span>";
         el.classList.toggle("off", !picCanSet);
-      } else if (q === "look") {
-        el.innerHTML = ICONS.look + "<span>" + esc(NIGHT ? t("classic_look") : t("night_look")) + "</span>";
       } else if (q === "input") {
         el.innerHTML = ICONS.input + "<span>" + esc(t("input")) + "</span>";
       }
     });
     if (qi >= vis.length) qi = Math.max(0, vis.length - 1);
     fitDate();
+    if (zone === "side") renderSide();
   }
   function renderMenu() {
     var menu = $("sleep-menu");
@@ -607,17 +538,8 @@
       .catch(function (e) { note(e.message); })
       .then(function () { picBusy = false; renderQuick(); });
   }
-  // The look is kept on this TV; the page starts again in the other look.
-  function toggleLook() {
-    ST.look = NIGHT ? "classic" : "night";
-    keep("tvhome.look", ST.look);
-    saveSettings();
-    restart();
-  }
-  // Start the page again, so a new look or new settings take effect everywhere at once.
-  function restart() {
-    location.replace(location.href.replace(/([?&])theme=[a-z]+&?/, "$1").replace(/[?&]$/, ""));
-  }
+  // Start the page again, so new settings take effect everywhere at once.
+  function restart() { location.reload(); }
   // The TV's own input list (HDMI, a console, a set top box): the TV_INPUT key through the bridge,
   // or straight from the launcher when there is no bridge (only where the TV has such a screen).
   function openInputs() {
@@ -630,7 +552,6 @@
     var q = quickVisible()[qi];
     if (q === "sleep") openMenu();
     else if (q === "picture") togglePicture();
-    else if (q === "look") toggleLook();
     else if (q === "input") openInputs();
   }
   function refreshQuick() {
@@ -684,6 +605,7 @@
       }).join("");
     }
     renderPop();
+    renderSideTab();
   }
 
   function renderPop() {
@@ -742,7 +664,7 @@
       shelfEls = [];
       return;
     }
-    if (NIGHT) {
+    {
       // lock screen notifications: the first three shows as glass cards
       data.shows = data.shows.slice(0, 3);
       track.innerHTML = data.shows.map(function (it) {
@@ -757,16 +679,6 @@
       shelfEls = Array.prototype.slice.call(track.children);
       return;
     }
-    track.innerHTML = data.shows.map(function (it) {
-      var art = it.backdrop || it.poster;
-      var pkg = it.app && it.app.package;
-      var badge = pkg && iconUrl(pkg) ? '<span class="badge"><img src="' + esc(iconUrl(pkg)) + '" alt="" onerror="this.parentNode.remove()"></span>' : "";
-      var bar = it.progress ? '<span class="bar"><i style="width:' + Math.round(it.progress * 100) + '%"></i></span>' : "";
-      return '<div class="tile show"><div class="face">' +
-        (art ? '<img src="' + esc(art) + '" alt="" decoding="async">' : '<span class="no-art">' + esc(it.title) + "</span>") +
-        badge + bar + '</div><div class="caption"><b>' + esc(it.title) + "</b><span>" + esc(subtitle(it)) + "</span></div></div>";
-    }).join("");
-    shelfEls = Array.prototype.slice.call(track.children);
   }
 
   // ---------------- apps ----------------
@@ -776,25 +688,10 @@
   function isNew(pkg) { return newApps.indexOf(pkg) >= 0; }
   // The TV's apps less the ones hidden in Home settings (they come back from the Apps list there).
   function shownApps() { return data.apps.filter(function (a) { return HIDDEN_TV.indexOf(a.package) < 0; }); }
-  // The gear tile: always there, whatever the TV calls its own settings app. OK opens a small menu,
-  // Home settings (this page's own) or TV settings (Android's).
-  function gearItem() { return { kind: "gear", name: t("settings"), package: SETTINGS_PKG }; }
   function moreItem() { return { kind: "more", name: t("more_apps") }; }
-  function gridList() {
-    if (NIGHT) return dockList();
-    var apps = shownApps().filter(function (a) { return a.package !== SETTINGS_PKG; });
-    var list = apps.filter(function (a) { return !tucked(a); });
-    var extra = apps.filter(tucked);
-    data.screens.forEach(function (sc) { list.push({ kind: "screen", id: sc.id, name: sc.name, ready: sc.ready, note: sc.note }); });
-    if (expanded) return list.concat(extra, [gearItem()]);
-    if (extra.length || list.length > GRID_MAX - 1) {
-      list = list.slice(0, GRID_MAX - 2);
-      list.push(gearItem(), moreItem());
-    } else list.push(gearItem());
-    return list;
-  }
+  function gridList() { return dockList(); }
 
-  // Night: a dock of the first ten apps (home.dock_size), then Settings, then More apps (which shows
+  // The dock: the first eleven apps (home.dock_size), then More apps (which shows
   // everything, the App Store first). The order and the More apps line come from Arrange apps on the
   // phone, or from moving apps with the TV remote (hold OK), once one is saved.
   function arrangeItems() {
@@ -824,15 +721,14 @@
     var arr = arrangeItems();
     var list = expanded ? arr.items.slice() : arr.items.slice(0, arr.line);
     if (expanded && store) list.unshift({ kind: "app", store: true, name: t("app_store"), package: STORE_PKG, id: store.id });
-    list.push(gearItem());
-    if (!expanded) list.push(moreItem());
+    if (!expanded) list.push(moreItem());   // Settings are in the sidebar now (fork)
     return list;
   }
 
   // Tell the bridge which apps this TV has (in its default order), so the phone can arrange them.
   var reported = "";
   function reportApps() {
-    if (!NIGHT || MOCK || PREVIEW || !data.apps.length) return;
+    if (MOCK || PREVIEW || !data.apps.length) return;
     var saved = data.order;
     data.order = null;   // the default order, not the arranged one
     var arr = arrangeItems();
@@ -868,7 +764,7 @@
   var hintTimer = null, hintFlash = "";
   function renderHint() {
     var text = hintFlash ||
-      (lift ? t("app_lift_hint") : NIGHT && expanded && zone === "grid" ? t("app_add_hint") : "");
+      (lift ? t("app_lift_hint") : expanded && zone === "grid" ? t("app_add_hint") : "");
     $("hint").textContent = text;
     $("hint").classList.toggle("on", !!text);
     document.documentElement.classList.toggle("hinting", !!text);
@@ -950,7 +846,6 @@
     keep("tvhome.apps.seen", seen.concat(fresh));
     newApps = newApps.concat(fresh.filter(function (p) { return newApps.indexOf(p) < 0; }));
     keep("tvhome.apps.new", newApps);
-    if (!NIGHT) return;
     materialise();
     var o = data.order;
     fresh.forEach(function (p) {
@@ -983,28 +878,17 @@
       '<div class="label">' + esc(it.name) + "</div></div>";
   }
 
-  function appHTML(it) {
-    if (NIGHT) return dockHTML(it);
-    var face;
-    if (it.kind === "screen") face = '<div class="face tool">' + ICONS.screen + "</div>";
-    else if (it.kind === "more") face = '<div class="face tool">' + ICONS.more + "</div>";
-    else if (it.kind === "gear") face = '<div class="face tool">' + ICONS.gear + "</div>";
-    else if (it.banner) face = '<div class="face"><img src="' + esc(it.banner) + '" alt="" decoding="async"></div>';
-    else if (iconUrl(it.package)) face = '<div class="face icon" style="background:' + esc(it.colour || "#2a2a30") + '"><img src="' + esc(iconUrl(it.package)) + '" alt=""></div>';
-    else face = '<div class="face word" style="background:' + esc(it.colour || "#2a2a30") + '">' + esc(it.name) + "</div>";
-    return '<div class="tile app">' + face + (isNew(it.package) ? '<i class="dot" aria-label="' + esc(t("new_app")) + '"></i>' : "") +
-      '<div class="label">' + esc(it.name) + "</div></div>";
-  }
+  function appHTML(it) { return dockHTML(it); }
 
   function renderGrid() {
     document.documentElement.classList.toggle("expanded", expanded);
     document.documentElement.classList.toggle("lifting", !!lift);
     gridItems = gridList();
-    if (NIGHT) {
-      // the dock is as wide as what is in it; More apps uses all twelve columns
-      GRID_COLS = expanded ? 12 : Math.max(1, Math.min(12, gridItems.length));
-      $("grid").style.gridTemplateColumns = "repeat(" + GRID_COLS + ", 7rem)";
-    }
+    // the dock is as wide as what is in it; More apps uses all twelve columns. A full dock (and More
+    // apps) spans the Keep watching row edge to edge, its icons spread evenly (glass.css, .fill).
+    GRID_COLS = expanded ? 12 : Math.max(1, Math.min(12, gridItems.length));
+    $("grid").style.gridTemplateColumns = "repeat(" + GRID_COLS + ", 7rem)";
+    $("apps-section").classList.toggle("fill", expanded || gridItems.length >= 10);
     $("grid").innerHTML = gridItems.map(appHTML).join("");
     gridEls = Array.prototype.slice.call($("grid").children);
     renderHint();
@@ -1015,6 +899,8 @@
     shelfEls.concat(gridEls, quickEls).forEach(function (el) { if (el) el.classList.remove("focus"); });
     $("people").classList.remove("focus");
     Array.prototype.forEach.call($("people").children, function (el) { el.classList.remove("focus"); });
+    if ($("side-tab")) $("side-tab").classList.remove("focus");
+    Array.prototype.forEach.call(document.querySelectorAll("#side-rows .focus, #np .focus"), function (el) { el.classList.remove("focus"); });
   }
 
   function scrollShelf() {
@@ -1035,38 +921,28 @@
     if (zone === "settings") { renderSettings(); return; }
     clearFocus();
     renderHint();
+    if (zone === "side") { renderSide(); return; }
+    if (zone === "tab") { $("side-tab").classList.add("focus"); return; }
+    if (zone === "np") { renderNp(); return; }
     if (zone === "gear") { if (gridEls[g]) gridEls[g].classList.add("focus"); renderGear(); return; }
     if (zone === "menu") { renderMenu(); return; }
     if (zone === "pmenu") { renderPop(); $("people").classList.add("focus"); return; }
     if (zone === "quick" && quickEls[qi]) {
       quickEls[qi].classList.add("focus");
-      hero(null);
-      $("place").style.visibility = "";
-      showPhoto();
       return;
     }
     if (zone === "people" && peopleOn()) {
       if (isHead()) $("people").classList.add("focus");
       else if ($("people").children[pi]) $("people").children[pi].classList.add("focus");   // drawn yet
-      hero(null);
-      $("place").style.visibility = "";
-      showPhoto();
       return;
     }
     if (zone === "shelf" && shelfEls[s]) {
       shelfEls[s].classList.add("focus");
       scrollShelf();
-      if (NIGHT) return;   // the cards carry the titles; the photo stays put under the clock
-      setBg(data.shows[s].backdrop || data.shows[s].poster, true);
-      hero(data.shows[s]);
-      $("place").style.visibility = "hidden";
     } else {
       zone = "grid";
       g = Math.max(0, Math.min(g, gridEls.length - 1));
       if (gridEls[g]) gridEls[g].classList.add("focus");
-      hero(null);
-      $("place").style.visibility = "";
-      showPhoto();
     }
     renderHint();
   }
@@ -1083,11 +959,14 @@
 
   function move(dx, dy) {
     touched = true;
+    if (zone === "side") { sideMove(dx, dy); return; }
+    if (zone === "tab") { tabMove(dx, dy); return; }
+    if (zone === "np") { npMove(dx, dy); return; }
     if (zone === "settings") { setMove(dx, dy); return; }
     if (zone === "gear") { if (dy) { gi = Math.max(0, Math.min(1, gi + dy)); renderGear(); } return; }
     if (lift) { moveLift(dx, dy); return; }
     // Night with More apps open: the cards step aside, so up and down skip them
-    var cards = NIGHT && expanded ? [] : shelfEls;
+    var cards = expanded ? [] : shelfEls;
     if (zone === "menu") {
       if (dx) menuI = Math.max(0, Math.min(SLEEP_CHOICES.length - 1, menuI + dx));
       paintFocus();
@@ -1121,8 +1000,9 @@
         pi = Math.max(0, Math.min(PEOPLE.length - 1, pi + dx));
       } else if (dy > 0) zone = cards.length ? "shelf" : "grid";
     } else if (zone === "shelf") {
+      if (dx < 0 && s === 0) { openSide(); return; }
+      if (dy < 0) { upTop(shelfEls[s]); return; }   // up from the cards: the person tab or Now Playing
       if (dx) s = Math.max(0, Math.min(shelfEls.length - 1, s + dx));
-      else if (dy < 0) { if (peopleOn()) toPeople(); else if (hasQuick()) { zone = "quick"; qi = 0; } }
       else if (dy > 0 && gridEls.length) {
         // land on the app under the show
         var b = shelfEls[s].getBoundingClientRect();
@@ -1131,13 +1011,13 @@
       }
     } else {
       var row = Math.floor(g / GRID_COLS), lastRow = Math.floor((gridEls.length - 1) / GRID_COLS);
+      if (dx < 0 && g % GRID_COLS === 0) { openSide(); return; }
       if (dx) {
         var nx = g + dx;
         if (nx >= 0 && nx < gridEls.length && Math.floor(nx / GRID_COLS) === row) g = nx;
       } else if (dy < 0 && row === 0) {
         if (cards.length) zone = "shelf";
-        else if (peopleOn()) toPeople();
-        else if (hasQuick()) zone = "quick";   // offline the sleep and picture buttons are hidden
+        else { upTop(gridEls[g]); return; }
       } else if (dy < 0) {
         g -= GRID_COLS;
       } else if (row < lastRow) {
@@ -1150,17 +1030,21 @@
   // Start on the people switch, so the first press picks who is watching.
   function startFocus() {
     s = 0; g = 0;
-    if (peopleOn()) toPeople();
-    else zone = shelfEls.length ? "shelf" : "grid";
+    zone = shelfEls.length ? "shelf" : "grid";
   }
 
-  function goHome() {
+  function goHome(back) {
+    if (zone === "side") { sideBack(); return; }
+    if (zone === "tab") { fromTab(); return; }
+    if (zone === "np") { fromNp(); return; }
     if (zone === "settings") { setBack(); return; }
     if (zone === "gear") { closeGear(); paintFocus(); return; }
     if (lift) { dropLift(); return; }   // BACK puts a picked-up app down where it is
     if (zone === "pmenu") { if (plift) dropPeople(); else closePop(); paintFocus(); return; }
     if (zone === "menu") { closeMenu(); paintFocus(); return; }   // BACK just closes the sleep choices
-    if (expanded) { expanded = false; renderGrid(); }
+    if (expanded) { expanded = false; renderGrid(); startFocus(); paintFocus(); return; }
+    var atStart = zone === (shelfEls.length ? "shelf" : "grid") && s === 0 && g === 0;
+    if (back === true && atStart) { openSide(); return; }   // tvOS: Back from the content goes to the sidebar
     startFocus();
     paintFocus();
   }
@@ -1170,6 +1054,7 @@
   // there is nothing to pick up here, and then the press counts as a normal OK.
   function hold() {
     touched = true;
+    if (zone === "side" || zone === "tab" || zone === "np") return false;
     if (zone === "settings") return setHold();
     if (zone === "gear") return false;
     if (lift) { dropLift(); return true; }
@@ -1178,12 +1063,15 @@
       else if (PEOPLE.length > 1) { plift = true; renderPop(); }
       return true;
     }
-    if (zone === "grid" && NIGHT) return holdApp();
+    if (zone === "grid") return holdApp();
     return false;
   }
 
   function activate() {
     touched = true;
+    if (zone === "side") { sideActivate(); return; }
+    if (zone === "tab") { openSide(); return; }
+    if (zone === "np") { npAct(NP_ITEMS[npi]); return; }
     if (zone === "settings") { setActivate(); return; }
     if (zone === "gear") { if (gi === 0) openSettings(); else openTvSettings(); return; }
     if (lift) { dropLift(); return; }
@@ -1206,14 +1094,18 @@
     if (zone === "shelf") {
       var it = data.shows[s];
       if (!it) return;
-      status(it.app ? t("opening_in", { title: it.title, app: it.app.name }) : t("opening", { title: it.title }), true);
-      api("POST", "/api/continue/open", { id: it.id, who: NOBODY ? "both" : who }, 60000)
-        .then(function (res) { status(res.note || ""); })
-        .catch(function (e) {
-          // the bridge can't help: at least open the app it was in
-          if (TV && it.app && TV.launch(it.app.package)) { status(""); return; }
-          status(e.message);
-        });
+      var resume = function () {
+        status(it.app ? t("opening_in", { title: it.title, app: it.app.name }) : t("opening", { title: it.title }), true);
+        api("POST", "/api/continue/open", { id: it.id, who: NOBODY ? "both" : who }, 60000)
+          .then(function (res) { status(res.note || ""); })
+          .catch(function (e) {
+            // the bridge can't help: at least open the app it was in
+            if (TV && it.app && TV.launch(it.app.package)) { status(""); return; }
+            if (window.tvMotion) tvMotion.abort();
+            status(e.message);
+          });
+      };
+      if (window.tvMotion) tvMotion.launch(shelfEls[s], resume); else resume();   // motion.js: zoom, then open
       return;
     }
     var a = gridItems[g], el = gridEls[g];
@@ -1233,8 +1125,12 @@
       return;
     }
     opened(a.package);
-    if (TV && TV.launch(a.package)) return;
-    api("POST", "/api/launch", { app: a.id || a.package }).catch(function (e) { status(e.message); });
+    var go = function () {
+      if (TV && TV.launch(a.package)) return;
+      api("POST", "/api/launch", { app: a.id || a.package })
+        .catch(function (e) { if (window.tvMotion) tvMotion.abort(); status(e.message); });
+    };
+    if (window.tvMotion) tvMotion.launch(el, go); else go();   // motion.js: zoom, then open
   }
 
   // ---------------- the gear tile's menu: Home settings or the TV's own settings ----------------
@@ -1265,6 +1161,14 @@
     document.documentElement.classList.remove("gearing");
     if (zone === "gear") zone = "grid";
   }
+  // Google Play (fork: the sidebar's Store): straight from the launcher, else through the bridge.
+  function openStore() {
+    opened(STORE_PKG);
+    if (TV && TV.launch(STORE_PKG)) return;
+    var st = data.apps.filter(function (a) { return a.package === STORE_PKG; })[0];
+    if (OFFLINE) { status(t("store_none")); return; }
+    api("POST", "/api/launch", { app: (st && st.id) || STORE_PKG }).catch(function () { status(t("store_none")); });
+  }
   // Android's own settings: the Settings app where the TV has one, else the system settings screen.
   function openTvSettings() {
     closeGear();
@@ -1274,6 +1178,267 @@
     if (done) return;
     if (OFFLINE) { status(t("tv_settings_none")); return; }
     api("POST", "/api/launch", { app: "settings" }).catch(function () { status(t("tv_settings_none")); });
+  }
+
+  // ---------------- the sidebar (fork): who is watching, the quick buttons and Settings ----------------
+  // After the Apple TV app's sidebar: a glass panel that slides in from the left over the home. Left
+  // at the start of a row, or Back from the start of the home, opens it; Right or Back closes it and
+  // focus goes back where it was. At the top, who is watching (OK lists everyone); then the quick
+  // buttons (tvs[].quick); then Settings: couch-tv's own and the TV's. The sleep timer and the
+  // people open a second level in the same panel; Back steps out of it.
+  var SIDE = { level: "main", i: 0, from: null }, sideTime = "";
+  var SIDE_MENU = '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
+  function sideItems() {
+    var rows = [];
+    if (SIDE.level === "sleep") {
+      var m = minutesLeft();
+      rows.push({ title: t("sleep_timer") });
+      SLEEP_CHOICES.forEach(function (c) {
+        rows.push({ kind: "sleep", mins: c, label: c ? t("n_min", { n: c }) : t("timer_off"), check: !c && !m });
+      });
+      if (m) rows.push({ note: t("off_in", { m: m }) });
+      return rows;
+    }
+    if (SIDE.level === "who") {
+      rows.push({ title: t("who_watching") });
+      PEOPLE.forEach(function (p) { rows.push({ kind: "pick", id: p.id, label: p.name, avatar: avatarHTML(p), check: p.id === who }); });
+      return rows;
+    }
+    if (peopleCount() >= 2) {
+      var cur = PEOPLE[whoIndex()];
+      rows.push({ kind: "who", label: cur.name, avatar: avatarHTML(cur), value: sideTime, head: true });
+    } else rows.push({ head: true, label: t("settings"), value: sideTime });
+    rows.push({ kind: "store", icon: ICONS.store, label: t("store") });   // Google Play, as the TV app's Store
+    quickVisible().forEach(function (q) {
+      if (q === "sleep") {
+        var left = minutesLeft();
+        rows.push({ kind: "sleep-open", icon: ICONS.moon, label: t("sleep_timer"), value: left ? t("n_min", { n: left }) : t("timer_off") });
+      } else if (q === "picture") rows.push({ kind: "picture", icon: ICONS.picture, label: t("picture_mode"), value: picLabel() });
+      else if (q === "input") rows.push({ kind: "input", icon: ICONS.input, label: t("input") });
+    });
+    rows.push({ title: t("settings") });
+    rows.push({ kind: "home-settings", icon: ICONS.sliders, label: t("gear_home") });
+    rows.push({ kind: "tv-settings", icon: ICONS.gear, label: t("gear_tv") });
+    return rows;
+  }
+  function sideFocusable(r) { return !!r.kind; }
+  function sideRows() { return sideItems().filter(sideFocusable); }
+  function renderSide() {
+    var rows = sideItems(), k = 0;
+    SIDE.i = Math.max(0, Math.min(SIDE.i, sideRows().length - 1));
+    $("side-rows").innerHTML = rows.map(function (r) {
+      if (r.title) return '<p class="side-sec">' + esc(r.title) + "</p>";
+      if (r.note) return '<p class="side-note">' + esc(r.note) + "</p>";
+      var f = sideFocusable(r) && k++ === SIDE.i;
+      var cls = "side-row" + (r.head ? " side-head" : "") + (f ? " focus" : "") + (sideFocusable(r) ? "" : " still");
+      return '<div class="' + cls + '">' + (r.avatar || (r.icon ? '<i class="sic">' + r.icon + "</i>" : "")) +
+        "<b>" + esc(r.label) + "</b>" + (r.value ? '<span class="sv">' + esc(r.value) + "</span>" : "") +
+        (r.check ? '<i class="sck">' + ICONS.check + "</i>" : "") + "</div>";
+    }).join("");
+  }
+  function renderSideTab() {
+    var el = $("side-tab");
+    if (!el) return;
+    el.innerHTML = peopleCount() >= 2 ? avatarHTML(PEOPLE[whoIndex()]) + "<b>" + esc(PEOPLE[whoIndex()].name) + "</b>"
+      : '<i class="sic">' + SIDE_MENU + "</i>";
+  }
+  function openSide() {
+    if (zone === "side") return;
+    SIDE.from = { zone: zone, s: s, g: g };
+    SIDE.level = "main"; SIDE.i = 0;
+    zone = "side";
+    clearFocus();
+    document.documentElement.classList.add("siding");
+    $("side").setAttribute("aria-hidden", "false");
+    renderSide();
+  }
+  function closeSide() {
+    if (zone !== "side") return;
+    document.documentElement.classList.remove("siding");
+    $("side").setAttribute("aria-hidden", "true");
+    var f = SIDE.from || { zone: shelfEls.length ? "shelf" : "grid", s: 0, g: 0 };
+    zone = f.zone; s = f.s; g = f.g;
+    if (zone === "side" || zone === "settings") zone = shelfEls.length ? "shelf" : "grid";
+    paintFocus();
+  }
+  // The person tab top left takes focus too: up from the top row reaches it, OK opens the sidebar
+  // (on who is watching), Left opens it as well, Down or Back goes back where you were.
+  var tabFrom = null;
+  function toTab() { tabFrom = { zone: zone, s: s, g: g }; zone = "tab"; paintFocus(); }
+  function fromTab() {
+    var f = tabFrom || { zone: shelfEls.length ? "shelf" : "grid", s: 0, g: 0 };
+    zone = f.zone; s = f.s; g = f.g;
+    paintFocus();
+  }
+  function tabMove(dx, dy) {
+    if (dy > 0) fromTab();
+    else if (dx < 0) openSide();
+    else if (dx > 0 && npOn()) toNp(tabFrom);
+  }
+  // Up from the top row: the corner over it. The person tab is top left, Now Playing top right.
+  function upTop(el) {
+    if (npOn() && el) {
+      var b = el.getBoundingClientRect();
+      if (b.left + b.width / 2 > innerWidth / 2) { toNp({ zone: zone, s: s, g: g }); return; }
+    }
+    toTab();
+  }
+  function sideLevel(level, i) { SIDE.level = level; SIDE.i = i || 0; renderSide(); }
+  function sideMove(dx, dy) {
+    if (dx > 0) { closeSide(); return; }
+    if (dx < 0) { if (SIDE.level !== "main") sideBack(); return; }
+    SIDE.i = Math.max(0, Math.min(sideRows().length - 1, SIDE.i + dy));
+    renderSide();
+  }
+  function sideBack() {
+    if (SIDE.level === "sleep") {   // back onto the Sleep timer row
+      SIDE.level = "main";
+      sideLevel("main", Math.max(0, sideRows().map(function (r) { return r.kind; }).indexOf("sleep-open")));
+      return;
+    }
+    if (SIDE.level === "who") { sideLevel("main", 0); return; }
+    closeSide();
+  }
+  function sideActivate() {
+    var r = sideRows()[SIDE.i];
+    if (!r) return;
+    if (r.kind === "who") { sideLevel("who", whoIndex()); return; }
+    if (r.kind === "pick") { pickWho(r.id); renderPeople(); sideLevel("main", 0); return; }
+    if (r.kind === "sleep-open") {
+      var m = minutesLeft();
+      sideLevel("sleep", m ? SLEEP_CHOICES.length - 1 : 1);   // a timer is running: start on Off; otherwise 30 min
+      return;
+    }
+    if (r.kind === "sleep") {
+      setSleep(r.mins);   // it closes the old sleep menu, which moves focus to the quick buttons
+      zone = "side";
+      sideBack();
+      return;
+    }
+    if (r.kind === "picture") { togglePicture(); renderSide(); return; }
+    if (r.kind === "input") { closeSide(); openInputs(); return; }
+    if (r.kind === "store") { closeSide(); openStore(); return; }
+    if (r.kind === "home-settings") { closeSide(); openSettings(); return; }
+    if (r.kind === "tv-settings") { closeSide(); openTvSettings(); return; }
+  }
+
+  // ---------------- Now Playing (fork): music from Home Assistant ----------------
+  // A Liquid Glass card top right, there only while something plays, laid out like the iOS lock
+  // screen player: artwork, title and artist and a level meter on top; elapsed, the progress bar and
+  // remaining in the middle; rewind, play/pause and fast forward below, with the speaker button at
+  // the end. The symbols stand on the glass with no buttons behind them; the focused one gets the
+  // white circle (a TV remote needs to see focus). Up from a card on the right half (or Right from
+  // the person tab) reaches it, landing on play/pause (the group's main action). Only the three
+  // controls take focus: the title is not a button, and the speaker symbol waits for Home
+  // Assistant's speaker list before it does anything. Fed by window.tvNowPlaying(state) (Home Assistant,
+  // later); the mock plays sample tracks. ?np=0 hides it in the mock.
+  var NP = null, npi = 1, npFrom = null, npTimer = null;
+  var NP_ITEMS = ["prev", "play", "next"];
+  var NP_ICONS = {
+    prev: '<svg viewBox="0 0 32 24" class="solid"><path d="M15 5.2v13.6a1 1 0 0 1-1.6.8L4.6 12.8a1 1 0 0 1 0-1.6l8.8-6.8a1 1 0 0 1 1.6.8zM29 5.2v13.6a1 1 0 0 1-1.6.8l-8.8-6.8a1 1 0 0 1 0-1.6l8.8-6.8a1 1 0 0 1 1.6.8z"/></svg>',
+    next: '<svg viewBox="0 0 32 24" class="solid"><path d="M3 5.2v13.6a1 1 0 0 0 1.6.8l8.8-6.8a1 1 0 0 0 0-1.6L4.6 4.4A1 1 0 0 0 3 5.2zM17 5.2v13.6a1 1 0 0 0 1.6.8l8.8-6.8a1 1 0 0 0 0-1.6l-8.8-6.8a1 1 0 0 0-1.6.8z"/></svg>',
+    play: '<svg viewBox="0 0 24 24" class="solid"><path d="M6.5 4.6v14.8a1 1 0 0 0 1.5.9l12-7.4a1 1 0 0 0 0-1.8l-12-7.4a1 1 0 0 0-1.5.9z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" class="solid"><rect x="5" y="3.5" width="4.6" height="17" rx="1.3"/><rect x="14.4" y="3.5" width="4.6" height="17" rx="1.3"/></svg>',
+    route: '<svg viewBox="0 0 24 24"><path d="M6.3 16.6a8 8 0 1 1 11.4 0M8.7 14.3a4.6 4.6 0 1 1 6.6 0"/><path d="M12 14.5l4.2 5.5H7.8z" class="fill"/></svg>',
+    note: '<svg viewBox="0 0 24 24"><path d="M9 18.5V5.5l10-2v13"/><circle cx="6.5" cy="18.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/></svg>'
+  };
+  var MOCK_TRACKS = [   // synthetic, for the mock only
+    { title: "Golden Hour Drive", artist: "The Paper Lanterns", album: "Coastal Lines", duration: 214, art: "linear-gradient(135deg, #ff9a5a, #c2366b 55%, #4a1e6e)" },
+    { title: "Low Tide", artist: "Mara Quell", album: "Saltwater", duration: 187, art: "linear-gradient(160deg, #3fd1c9, #1b6fa8 60%, #142a52)" },
+    { title: "Neon Rain", artist: "Kito & The Hours", album: "After Dark", duration: 241, art: "linear-gradient(140deg, #b06bff, #3a3fd8 55%, #10123a)" }
+  ];
+  var mockTrack = 0;
+  function npOn() { return !!(NP && (NP.state === "playing" || NP.state === "paused")); }
+  function mmss(sec) { sec = Math.max(0, Math.round(sec)); return Math.floor(sec / 60) + ":" + (sec % 60 < 10 ? "0" : "") + (sec % 60); }
+  function npArt(cls) {
+    return '<span class="' + cls + '" style="background:' + esc(NP.art || "rgba(255,255,255,0.14)") + '">' + (NP.picture ? "" : NP_ICONS.note) +
+      (NP.picture ? '<img src="' + esc(NP.picture) + '" alt="">' : "") + "</span>";
+  }
+  function renderNp() {
+    var el = $("np");
+    el.classList.toggle("on", npOn());
+    el.classList.toggle("playing", !!NP && NP.state === "playing");
+    el.setAttribute("aria-hidden", npOn() ? "false" : "true");
+    if (!npOn()) { el.innerHTML = ""; return; }
+    var f = function (k) { return zone === "np" && NP_ITEMS[npi] === k ? " focus" : ""; };
+    el.innerHTML = '<div class="np-top"><div class="np-info">' + npArt("np-art") +
+        '<span class="np-txt"><b>' + esc(NP.title) + "</b><small>" + esc(NP.artist) + "</small></span></div>" +
+        '<span class="np-level" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></div>' +
+      '<div class="np-time"><span class="np-el"></span><span class="np-bar"><i></i></span><span class="np-rem"></span></div>' +
+      '<div class="np-ctl">' +
+        '<span class="np-btn' + f("prev") + '" aria-label="Previous">' + NP_ICONS.prev + "</span>" +
+        '<span class="np-btn np-main' + f("play") + '" aria-label="' + (NP.state === "playing" ? "Pause" : "Play") + '">' +
+          (NP.state === "playing" ? NP_ICONS.pause : NP_ICONS.play) + "</span>" +
+        '<span class="np-btn' + f("next") + '" aria-label="Next">' + NP_ICONS.next + "</span>" +
+        '<span class="np-route" aria-hidden="true">' + NP_ICONS.route + "</span>" +
+      "</div>";
+    npTime();
+  }
+  // the elapsed and remaining times and the bar, every second, without redrawing the card
+  function npTime() {
+    var el = $("np");
+    if (!npOn() || !el.querySelector(".np-bar")) return;
+    var pos = NP.position || 0, dur = NP.duration || 0;
+    el.querySelector(".np-el").textContent = mmss(pos);
+    el.querySelector(".np-rem").textContent = dur ? "\u2212" + mmss(dur - pos) : "";
+    el.querySelector(".np-bar i").style.width = (dur ? Math.min(100, pos / dur * 100) : 0).toFixed(2) + "%";
+  }
+  function toNp(from) {
+    npFrom = from || { zone: zone, s: s, g: g };
+    tabFrom = npFrom;
+    zone = "np"; npi = 1;   // play/pause
+    paintFocus();
+  }
+  function fromNp() {
+    var f = npFrom || { zone: shelfEls.length ? "shelf" : "grid", s: 0, g: 0 };
+    zone = f.zone === "tab" ? "tab" : f.zone; s = f.s; g = f.g;
+    paintFocus();
+  }
+  // One row of controls: previous, play/pause, next.
+  function npMove(dx, dy) {
+    if (dy > 0) { fromNp(); return; }
+    if (!dx) return;
+    if (dx < 0 && npi === 0) { zone = "tab"; paintFocus(); return; }   // on to the person tab
+    npi = Math.max(0, Math.min(NP_ITEMS.length - 1, npi + dx));
+    renderNp();
+  }
+  function npAct(what) {
+    if (!NP) return;
+    if (MOCK) mockNp(what);
+    else if (window.TVNP_ACTION) window.TVNP_ACTION(what);   // Home Assistant, later
+    renderNp();
+  }
+  // Home Assistant (later) hands the player's state here: { state: "playing" | "paused" | "idle",
+  // title, artist, album, picture (artwork URL) or art (a CSS background), duration, position, speaker }
+  window.tvNowPlaying = function (st) {
+    var was = npOn();
+    NP = st;
+    if (!npOn() && zone === "np") fromNp();
+    renderNp();
+    if (was !== npOn() && window.tvMotion && tvMotion.np) tvMotion.np(npOn());
+  };
+  function mockNp(what) {
+    if (what === "play") NP.state = NP.state === "playing" ? "paused" : "playing";
+    else if (what === "next" || what === "prev") {
+      if (what === "prev" && NP.position > 3) NP.position = 0;   // like every player: back to the start first
+      else {
+        mockTrack = (mockTrack + (what === "next" ? 1 : MOCK_TRACKS.length - 1)) % MOCK_TRACKS.length;
+        var tr = MOCK_TRACKS[mockTrack];
+        NP = { state: "playing", title: tr.title, artist: tr.artist, album: tr.album, art: tr.art, duration: tr.duration, position: 0, speaker: NP.speaker };
+      }
+    }
+  }
+  function startMockNp() {
+    if (!MOCK || /[?&]np=0\b/.test(Q)) return;
+    var tr = MOCK_TRACKS[0];
+    window.tvNowPlaying({ state: "playing", title: tr.title, artist: tr.artist, album: tr.album, art: tr.art, duration: tr.duration, position: 64, speaker: "Living room speaker" });
+    clearInterval(npTimer);
+    npTimer = setInterval(function () {
+      if (!NP || NP.state !== "playing") return;
+      NP.position = (NP.position || 0) + 1;
+      if (NP.position >= NP.duration) { mockNp("next"); renderNp(); }
+      npTime();
+    }, 1000);
   }
 
   // ---------------- Home settings: couch-tv's own settings screen ----------------
@@ -1493,12 +1658,7 @@
   // ---- look, scenes and the household's own photos ----
   var SECS_STEPS = [10, 15, 20, 30, 45, 60, 120];
   function lookRows() {
-    var look = lookSetting() === "classic" ? "classic" : "night", st = sceneState(), rows = [head(t("look_head"))];
-    ["night", "classic"].forEach(function (id) {
-      rows.push({ kind: "choice", key: "look:" + id, label: t("look_" + id), sub: t("look_" + id + "_sub"), checked: look === id,
-        act: function () { ST.look = id; keep("tvhome.look", id); saveSettings(); } });
-    });
-    rows.push(head(t("scenes_head")));
+    var st = sceneState(), rows = [head(t("scenes_head"))];
     st.order.forEach(function (id) {
       var sc = sceneById(id);
       if (!sc) return;
@@ -1610,7 +1770,6 @@
       hidden.forEach(function (a) { rows.push(row(a, "app_hidden")); });
     }
     rows.push(info("apps-note", t("apps_note")));
-    if (!NIGHT) rows.push(info("apps-classic", t("apps_classic")));
     return rows;
   }
   function setHidden(list) { HIDDEN_TV = list; ST.hidden_apps = list.slice(); saveSettings(); }
@@ -2005,9 +2164,10 @@
       okTimer = setTimeout(function () { okHeld = true; if (!hold()) activate(); ensureFocus(); }, HOLD_MS);
       return;
     }
+    if ((e.key === "MediaPlayPause" || e.keyCode === 179 || e.keyCode === 85) && npOn()) { e.preventDefault(); npAct("play"); return; }
     var arrow = arrowOf(e);
     if (arrow) move(arrow[0], arrow[1]);
-    else if (isBack(e)) goHome();
+    else if (isBack(e)) goHome(true);
     else if (isMenu(e)) { if (!e.repeat) hold(); }   // optional: many remotes have no Menu key
     else { ensureFocus(); return; }                   // anything else is not ours: Android gets it
     e.preventDefault();
@@ -2105,7 +2265,7 @@
       }),
       (TV || PREVIEW || MOCK) ? Promise.resolve() : api("GET", "/api/apps").then(function (j) { data.bridgeApps = j.apps || []; }),
       // the order arranged on the phone (or with this TV's remote)
-      NIGHT ? api("GET", "/api/app-order").then(bridgeOrder) : Promise.resolve(),
+      api("GET", "/api/app-order").then(bridgeOrder),
       // Home settings: the bridge keeps a copy, so the phone and this TV agree
       syncSettings()
     ];
@@ -2134,7 +2294,8 @@
 
   // the native side calls these
   // Home on the remote also re-reads the lists, so an order arranged on the phone shows straight away
-  window.tv = { back: goHome, home: function () { if (zone === "settings") closeSettings(); else goHome(); refresh(); },
+  window.tv = { back: function () { goHome(true); },
+    home: function () { if (zone === "side") closeSide(); if (zone === "settings") closeSettings(); else goHome(); refresh(); },
     resume: function () { okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); },
     // the launcher's file picker has copied the chosen photos into its own storage (Home settings)
     photosAdded: function (names) { photosAdded(names); } };
@@ -2146,7 +2307,7 @@
     mark("app-start");
     clock();
     setInterval(clock, 15000);
-    if (NIGHT) {
+    {
       buildScenes();
       // ?scene=fog starts on that scene, for previews (?scene=own: the first of the household's photos)
       var first = (Q.match(/[?&]scene=([a-z]+)/) || [])[1];
@@ -2157,9 +2318,7 @@
       refreshWeather();
       setInterval(refreshWeather, WX_EVERY * 60000);
     }
-    photo = photoForHour(new Date().getHours());
-    showPhoto();
-    photoTimer = setInterval(nextPhoto, PHOTO_MS);
+    $("place").textContent = "";
     var cached = load();
     if (cached) { data.showsBy = cached.showsBy || data.showsBy; data.screens = cached.screens || []; data.order = cached.order || null; }
     setPeople(PEOPLE);   // the cache may predate someone new
@@ -2170,6 +2329,7 @@
     if (TV) data.apps = sortApps(nativeApps() || []);
     if (cached || TV) { render(); mark("home-painted-from-cache"); }
     renderQuick();
+    startMockNp();   // fork: sample music in the mock (Now Playing)
     if (!OFFLINE) refreshQuick();
     refresh().then(function () { mark("home-painted-live"); });
   }

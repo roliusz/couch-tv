@@ -42,7 +42,6 @@ The round buttons at the top right of the home. Any of these, in the order you l
 |---|---|---|
 | `sleep` | Sleep timer: 15, 30, 60 or 90 minutes, then the TV turns off. | The bridge |
 | `picture` | Flips between the TV's two picture modes in `picture.modes`. | The bridge, ADB, and a `picture` entry |
-| `look` | Flips the home between the Night scenes and the Classic look. This TV remembers the choice. | Nothing |
 | `input` | Opens the TV's input list (HDMI, a games console, a set top box). With the bridge it presses the TV's Input key (`KEYCODE_TV_INPUT`); with no bridge the launcher opens the TV's own input screen if it has one. | The bridge, or a TV with an input screen |
 
 A button that cannot work right now is left out, the same way the sleep timer always disappeared
@@ -112,7 +111,7 @@ Home settings saves to the same `bridge/data/people.json` the phone uses.
   "scenes": ["night", "golden", "water", "fog", "dawn"],
   "scene_seconds": 20,
   "clock": "12h",
-  "dock_size": 10,
+  "dock_size": 11,
   "hide_packages": [],
   "language": "en"
 }
@@ -120,12 +119,11 @@ Home settings saves to the same `bridge/data/people.json` the phone uses.
 
 | Key | What it does |
 |---|---|
-| `look` ["night"] | `night`: the scenes with the big glass clock. `classic`: one photo, a grid of app banners. The `look` quick button overrides this on each TV, and `?theme=` overrides both for a preview. |
 | `scenes` [all five] | Which Night scenes take turns, and in what order. Any of `night`, `golden`, `water`, `fog`, `dawn`. One scene stays put. |
 | `scene_seconds` [20] | How long each scene shows. 5 or more. |
 | `clock` ["12h"] | `12h` (5:30 pm) or `24h` (17:30). |
 | `hide_packages` [none] | Android package names never shown on the home or in More apps, for a maker's own clutter (help apps, file browsers, screen sharing tools). `survey-tv.py` lists every TV app with its package name. For example `["com.example.tvhelp"]`. |
-| `dock_size` [10] | How many apps sit in the Night dock before Settings and More apps. 1 to 10. Everything else is behind More apps. The phone's Arrange apps keeps to the same number. |
+| `dock_size` [11] | How many apps sit in the dock before More apps. 1 to 11; a full dock lines up with the Keep watching row. Everything else is behind More apps. The phone's Arrange apps keeps to the same number. |
 | `language` ["en"] | The TV home's language until someone picks one in Home settings: `en` (English), `es` (Spanish) or `es-MX` (Mexican Spanish). The phone remote has its own choice, "Same as the TV" by default. |
 
 ## Apps on the home
@@ -147,8 +145,7 @@ remote:
 The order is saved by the bridge (`bridge/data/app-order.<tv>.json`), so the phone and the TV
 always agree; the TV reads it again every time Home is pressed. With no bridge, the TV keeps the
 order itself. An order made on the TV while the computer was off is handed to the bridge the next
-time it answers. Moving apps with the remote works on the Night look; Classic shows the apps in
-their default order.
+time it answers.
 
 ## The phone remote and the Claude ask
 
@@ -189,7 +186,7 @@ apps (home, More apps or hidden, and their order), the people, and the quick but
    and the TV agree and a TV whose storage was cleared gets them back. A change made on the TV while
    the computer is off is handed to the bridge the next time it answers. With no bridge they live on
    the TV only (the page's storage and the launcher's own store).
-4. `?theme=` and the other preview settings in the address, for a preview only.
+4. The preview settings in the address (`?scene=` and the rest), for a preview only.
 
 People and the app order are not part of Home settings' file: they use the lists they always had
 (`bridge/data/people.json` and `bridge/data/app-order.<tv>.json` with a bridge, the TV's own copy
@@ -205,7 +202,7 @@ already made on the TV.
 Serve the repo folder with any static server and open the home with `?mock=1`, for example
 `python3 -m http.server 8000`, then `http://127.0.0.1:8000/tv-home/web/index.html?mock=1`.
 `tv-home/web/mock.js` lists the preview settings: `people=4`, `quick=sleep,look,input`,
-`picture=1`, `look=classic`, `clock=24h`, `dock=6`, `scenes=fog,dawn`, `secs=8`, `newapp=1`,
+`picture=1`, `clock=24h`, `dock=6`, `scenes=fog,dawn`, `secs=8`, `newapp=1`,
 `offline=1`, `down`, and `reset=1` to forget what a preview saved (Home settings included). A
 preview keeps its Home settings apart from a real TV's (they start with `mock:`). `?scene=own`
 starts on the first of your own photos.

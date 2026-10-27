@@ -951,8 +951,8 @@ async def h_weather(request):
 # ---------- app order, arranged from the phone ----------
 # The TV home reports the apps it has (home-apps.<tv>.json, in its default order); the phone saves
 # the order and where the "More apps" line sits (app-order.<tv>.json). Apps above the line show in
-# the dock, which holds home.dock_size (10 unless set). Settings is not in the list: it always closes the dock.
-DOCK_MAX = config.HOME["dock_size"]   # home.dock_size in config.json, 1 to 10
+# the dock, which holds home.dock_size (11 unless set). Settings is not in the list: it always closes the dock.
+DOCK_MAX = config.HOME["dock_size"]   # home.dock_size in config.json, 1 to 11
 
 
 def _order_paths():

@@ -6,9 +6,12 @@
 <title>Home</title>
 <link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="glass.css">
+<link rel="stylesheet" href="sidebar.css">
+<link rel="stylesheet" href="nowplaying.css">
+<link rel="stylesheet" href="motion.css">
 </head>
 <body>
-<div class="bg" id="bg" aria-hidden="true"></div>
 <!-- Night look only: five scenes that take turns (photo, glass clock, the cut-out in front), built by app.js -->
 <div class="scenes" id="scenes" aria-hidden="true"></div>
 <div class="scrim" aria-hidden="true"></div>
@@ -16,13 +19,11 @@
 <header class="top">
   <div class="top-left">
     <div class="people-wrap">
+      <!-- fork: the sidebar's closed tab (who is watching); Left or Back opens the sidebar -->
+      <div class="side-tab" id="side-tab" aria-hidden="true"></div>
       <div class="people" id="people"></div>
       <!-- three or more people: the list the head icon opens -->
       <div class="people-pop" id="people-pop" role="listbox" aria-label="Who is watching"></div>
-    </div>
-    <div class="hero" id="hero" aria-live="polite">
-      <h1 id="hero-title"></h1>
-      <p id="hero-sub"></p>
     </div>
   </div>
   <div class="clock">
@@ -55,6 +56,13 @@
 
 <!-- the gear tile's menu (Home settings or TV settings), drawn by app.js -->
 <div class="gear-pop" id="gear-pop" role="menu"></div>
+<!-- fork: Now Playing, music from Home Assistant (app.js, "Now Playing"): the card top right -->
+<div class="np" id="np" aria-hidden="true"></div>
+<!-- fork: the sidebar, after the Apple TV app's (app.js, "the sidebar") -->
+<aside class="side" id="side" aria-hidden="true">
+  <div class="side-dim"></div>
+  <div class="side-panel" role="menu"><div class="side-rows" id="side-rows"></div></div>
+</aside>
 
 <!-- Home settings: couch-tv's own settings screen, drawn by app.js ("home settings") -->
 <div class="settings" id="settings" role="dialog" aria-modal="true" aria-label="Home settings">
@@ -75,8 +83,27 @@
   </div>
 </div>
 
+<!-- fork: the refraction of the Liquid Glass (glass.css): fractal noise, softened, bends what is
+     behind the glass. From the "liquid glass" CSS technique (codepen.io/lassiterda/pen/vEOpqMa). -->
+<svg width="0" height="0" style="position: absolute" aria-hidden="true" focusable="false">
+  <filter id="lg-dist" x="0%" y="0%" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.008 0.008" numOctaves="2" seed="92" result="noise"/>
+    <feGaussianBlur in="noise" stdDeviation="2" result="blurred"/>
+    <feDisplacementMap in="SourceGraphic" in2="blurred" scale="70" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+  <!-- the same, scaled down for the small pieces of glass with text on them (Now Playing, the
+       person tab): finer ripples and a shift of 18 px instead of 70, so it bends rather than smears -->
+  <filter id="lg-dist-sm" x="0%" y="0%" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.02 0.02" numOctaves="2" seed="92" result="noise"/>
+    <feGaussianBlur in="noise" stdDeviation="2" result="blurred"/>
+    <feDisplacementMap in="SourceGraphic" in2="blurred" scale="18" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
 <script src="i18n.js"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
+<script src="motion.js"></script>
+<script src="adapt.js"></script>
 </body>
 </html>

@@ -21,6 +21,8 @@
     apps: "Apps",
     more_apps: "More apps",
     app_store: "App Store",
+    store: "Store",
+    store_none: "This TV has no Google Play store to open.",
     settings: "Settings",
     new_app: "New",
     nothing_yet: "Nothing on the go yet.",
@@ -31,8 +33,6 @@
     sleep_timer: "Sleep timer",
     switching: "Switching…",
     picture_mode: "Picture mode",
-    classic_look: "Classic look",
-    night_look: "Night look",
     input: "Input",
     n_min: "{n} min",
     timer_off: "Off",
@@ -56,9 +56,6 @@
     moved_more: "{name} moved to More apps.",
     saved: "Saved.",
     that_app: "That app",
-    photo_by: "Photo: {by}",
-    photo_albury: "Storm at sunset, Albury",
-    photo_aresquiers: "Aresquiers beach, France",
     am: "am",
     pm: "pm",
 
@@ -125,11 +122,6 @@
     wx_night_only: "The weather shows on the Night look, next to the date.",
     every_min: "{n} minutes",
 
-    look_head: "Look",
-    look_night: "Night scenes",
-    look_night_sub: "A big glass clock, scenes taking turns",
-    look_classic: "Classic",
-    look_classic_sub: "One photo and a grid of app banners",
     scenes_head: "Scenes",
     scene_night: "Night",
     scene_golden: "Golden hour",
@@ -156,7 +148,7 @@
     photos_added_n: "{n} photos added.",
     photos_full: "Twenty photos is the most.",
     photo_remove: "Remove photo {n}",
-    photos_note: "Your photos take turns with the scenes, and the Classic look shows them instead of its own.",
+    photos_note: "Your photos take turns with the scenes.",
 
     apps_home: "On home ({n} of {max})",
     apps_more: "In More apps",
@@ -166,7 +158,6 @@
     app_hidden: "Hidden",
     apps_note: "OK moves an app between home, More apps and hidden. Hold OK to change the order.",
     apps_none: "No apps yet.",
-    apps_classic: "The Classic look keeps its own order. Hiding works on both looks.",
 
     people_add: "Add a person",
     people_type: "Type a name, then OK",
@@ -209,6 +200,8 @@
     apps: "Apps",
     more_apps: "Más apps",
     app_store: "Tienda de apps",
+    store: "Tienda",
+    store_none: "Este televisor no tiene Google Play para abrir.",
     settings: "Ajustes",
     new_app: "Nueva",
     nothing_yet: "Todavía no hay nada empezado.",
@@ -219,8 +212,6 @@
     sleep_timer: "Temporizador",
     switching: "Cambiando…",
     picture_mode: "Modo de imagen",
-    classic_look: "Aspecto clásico",
-    night_look: "Aspecto nocturno",
     input: "Entrada",
     n_min: "{n} min",
     timer_off: "Quitar",
@@ -244,9 +235,6 @@
     moved_more: "{name} ha pasado a Más apps.",
     saved: "Guardado.",
     that_app: "Esa app",
-    photo_by: "Foto: {by}",
-    photo_albury: "Tormenta al atardecer, Albury",
-    photo_aresquiers: "Playa de Aresquiers, Francia",
     am: "a. m.",
     pm: "p. m.",
 
@@ -310,11 +298,6 @@
     wx_night_only: "El tiempo se ve en el aspecto nocturno, junto a la fecha.",
     every_min: "{n} minutos",
 
-    look_head: "Aspecto",
-    look_night: "Escenas nocturnas",
-    look_night_sub: "Un gran reloj de cristal y escenas que se turnan",
-    look_classic: "Clásico",
-    look_classic_sub: "Una foto y una cuadrícula de apps",
     scenes_head: "Escenas",
     scene_night: "Noche",
     scene_golden: "Hora dorada",
@@ -341,7 +324,7 @@
     photos_added_n: "{n} fotos añadidas.",
     photos_full: "Veinte fotos como máximo.",
     photo_remove: "Quitar la foto {n}",
-    photos_note: "Tus fotos se turnan con las escenas, y el aspecto clásico las muestra en lugar de las suyas.",
+    photos_note: "Tus fotos se turnan con las escenas.",
 
     apps_home: "En el inicio ({n} de {max})",
     apps_more: "En Más apps",
@@ -351,7 +334,6 @@
     app_hidden: "Oculta",
     apps_note: "OK pasa una app entre el inicio, Más apps y ocultas. Mantén pulsado OK para cambiar el orden.",
     apps_none: "Todavía no hay apps.",
-    apps_classic: "El aspecto clásico tiene su propio orden. Ocultar funciona en los dos.",
 
     people_add: "Añadir una persona",
     people_type: "Escribe un nombre y pulsa OK",
@@ -391,8 +373,6 @@
   // Only what Mexico says differently; everything else comes from es.
   S["es-MX"] = {
     settings: "Configuración",
-    classic_look: "Vista clásica",
-    night_look: "Vista nocturna",
     no_inputs: "Esta TV no tiene una lista de entradas para abrir.",
     computer_off: "La computadora está apagada, así que no se ven los programas. Las apps sí funcionan.",
     computer_quiet: "La computadora no responde. Las apps sí funcionan.",
@@ -436,8 +416,6 @@
     wx_show: "Mostrar el clima",
     wx_night_only: "El clima se ve en la vista nocturna, junto a la fecha.",
 
-    look_head: "Vista",
-    look_night_sub: "Un reloj grande de vidrio y escenas que se van turnando",
     photos_pick: "Agregar fotos de una USB o de la TV",
     photos_pick_sub: "Abre el selector de archivos de la TV",
     photos_no_pick: "Esta TV no tiene selector de archivos",
@@ -447,10 +425,9 @@
     photos_bad: "Esa dirección no abrió como foto.",
     photos_added: "Foto agregada. Se ve como una escena.",
     photos_added_n: "{n} fotos agregadas.",
-    photos_note: "Tus fotos se turnan con las escenas, y la vista clásica las muestra en lugar de las suyas.",
+    photos_note: "Tus fotos se turnan con las escenas.",
 
     apps_note: "OK pasa una app entre el inicio, Más apps y ocultas. Mantén presionado OK para cambiar el orden.",
-    apps_classic: "La vista clásica tiene su propio orden. Ocultar funciona en las dos.",
 
     people_add: "Agregar una persona",
     people_type: "Escribe un nombre y presiona OK",

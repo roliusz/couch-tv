@@ -1,0 +1,129 @@
+/* The sidebar (fork addition), after the Apple TV app's: a floating glass panel down the left that
+   slides in over the home. app.js ("the sidebar") fills it and moves focus in it; motion.js gives
+   its rows the same focus springs as the tiles. Sizes are at 1920x1080 (1rem = 16px). */
+
+/* the people switch and the quick buttons now live in the sidebar */
+#people, #people-pop, #quick { display: none !important; }
+
+/* Closed: a small glass tab top left saying who is watching. Left or Back opens the sidebar. */
+.side-tab {
+  display: flex; align-items: center; gap: 0.75rem; width: max-content; padding: 0.375rem 1.25rem 0.375rem 0.375rem;
+  /* Liquid Glass from glass.css */
+  border-radius: 2rem;
+  font-size: 1.375rem; font-weight: 600; color: rgba(255, 255, 255, 0.9); text-shadow: none;
+  transition: opacity 260ms ease-out, background 200ms var(--ease), color 200ms var(--ease), box-shadow 200ms var(--ease);
+}
+.side-tab .avatar { width: 2.5rem; height: 2.5rem; font-size: 1.25rem; }
+/* focused (up from the top row): the same white pill as the sidebar's rows */
+.side-tab.focus { color: #111; transform: scale(1.08); }
+.side-tab.focus .sic { background: rgba(17, 17, 17, 0.1); }
+/* over a light sky (adapt.js): the glass stays the same, only the text turns dark; focus turns dark */
+.side-tab.on-light { color: #1d1d1f; }
+.side-tab.on-light .sic { background: rgba(0, 0, 0, 0.08); }
+.side-tab.on-light.focus { color: #fff; }
+.side-tab.on-light.focus .sic { background: rgba(255, 255, 255, 0.16); }
+.side-tab .sic { margin: 0 -0.5rem 0 0.25rem; }
+.side-tab:empty { display: none; }
+/* Hidden while the sidebar is open. Never by fading the tab itself: Chrome stops a piece of glass
+   seeing what is behind it while its element is below full opacity, so the glass would vanish
+   and pop back. The text, the glass layers and the shadow fade instead. */
+.side-tab > *, .side-tab::before, .side-tab::after { transition: opacity 260ms ease-out; }
+html.siding .side-tab > *, html.siding .side-tab::before, html.siding .side-tab::after { opacity: 0; }
+html.siding .side-tab { box-shadow: none; visibility: hidden; transition: visibility 0s linear 260ms; }
+
+/* Open: the panel and a shade over the left of the home so the panel reads */
+.side { position: fixed; inset: 0; z-index: 40; pointer-events: none; }
+.side-dim {
+  position: absolute; inset: 0; opacity: 0;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.25) 35%, rgba(0, 0, 0, 0) 65%);
+  transition: opacity 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* The panel is Liquid Glass, Apple's "regular" variant (glass.css has the dock's "clear" one): a
+   sidebar carries a lot of text, so it blurs more and pulls the brightness of what is behind it
+   down for legibility, and being large it reads a little more opaque than the dock. The same edge
+   light as the dock gives it thickness: a lit top edge, light inside the top, shade inside the
+   bottom, and a hairline rim that catches the light at two corners (.side-panel::after). Its
+   corners are concentric with the rows: row radius 1.875rem (a capsule, as tvOS 26 draws list
+   rows) + padding 1.5rem. The rows sit well in from the edge, so a focused row is a pill inside
+   the glass rather than a bar across it. */
+.side-panel {
+  position: absolute; top: 2.25rem; bottom: 2.25rem; left: 2.25rem; width: 21rem;
+  padding: 1.5rem 1.5rem; border-radius: 3.375rem; overflow: hidden;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.03) 30%, rgba(255, 255, 255, 0.02) 75%, rgba(255, 255, 255, 0.05) 100%),
+    rgba(22, 20, 26, 0.3);
+  -webkit-backdrop-filter: blur(2.25rem) saturate(180%) brightness(0.82);
+  backdrop-filter: blur(2.25rem) saturate(180%) brightness(0.82);
+  box-shadow:
+    inset 0 0.09rem 0 rgba(255, 255, 255, 0.5),
+    inset 0 -0.06rem 0 rgba(255, 255, 255, 0.16),
+    inset 0 1.5rem 2rem -1.5rem rgba(255, 255, 255, 0.2),
+    inset 0 -2rem 2.5rem -2rem rgba(0, 0, 0, 0.3),
+    0 2rem 4rem rgba(0, 0, 0, 0.4),
+    0 0.25rem 0.75rem rgba(0, 0, 0, 0.18);
+  /* closing: slides back out a little slower, like losing focus */
+  transform: translateX(calc(-100% - 3rem)); opacity: 0;
+  transition: transform 460ms cubic-bezier(0.4, 0, 0.2, 1), opacity 300ms ease-out 120ms;
+}
+.side-panel::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; padding: 0.09rem;
+  background: linear-gradient(150deg,
+    rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.16) 12%, rgba(255, 255, 255, 0.04) 35%,
+    rgba(255, 255, 255, 0.04) 70%, rgba(255, 255, 255, 0.2) 90%, rgba(255, 255, 255, 0.5) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+html.siding .side-dim { opacity: 1; }
+html.siding .side-panel {
+  transform: none; opacity: 1;
+  /* opening: quick, with a touch of spring (Apple's 0.32 s, bounce 0.15 as a curve) */
+  transition: transform 420ms cubic-bezier(0.3, 1.15, 0.4, 1), opacity 180ms ease-out;
+}
+/* the home steps back a little while the sidebar is open */
+.top, .shelf, .apps, #hint { transition: opacity 360ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+/* not the dock: lowering its opacity would flatten its glass (glass.css) */
+/* While it is open the home steps back: the dark gradient behind the panel, and the text on the
+   right dims. The glass pieces are not faded (Chrome would lose their glass mid-fade, see the tab
+   above); only what is written on them is. */
+.clock, .shelf-head, .ncard > *, .np > *, .dock-ic { transition: opacity 360ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+html.siding .clock, html.siding .shelf-head, html.siding .ncard > *, html.siding .np > *, html.siding .dock-ic { opacity: 0.55; }
+
+.side-rows { display: flex; flex-direction: column; gap: 0.125rem; }
+.side-row {
+  display: flex; align-items: center; gap: 0.875rem; min-height: 3.75rem; padding: 0 1.125rem 0 0.75rem;
+  border-radius: 1.875rem; color: rgba(255, 255, 255, 0.92);
+  font-size: 1.5rem; line-height: 1.2; font-weight: 500;
+  transition: transform 200ms var(--ease), background 200ms var(--ease), color 200ms var(--ease), box-shadow 200ms var(--ease);
+}
+.side-row b { flex: 1; min-width: 0; font-weight: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-row .sv { flex: none; font-size: 1.25rem; color: rgba(255, 255, 255, 0.55); white-space: nowrap; }
+.side-row .sic, .side-tab .sic {
+  display: flex; align-items: center; justify-content: center; flex: none; width: 2.375rem; height: 2.375rem;
+  border-radius: 50%; background: rgba(255, 255, 255, 0.14);
+}
+.side-row svg, .side-tab svg { width: 1.375rem; height: 1.375rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.side-row svg .fill { fill: currentColor; stroke: none; }
+.side-row .sck { flex: none; display: flex; color: inherit; }
+.side-row .avatar { width: 2.375rem; height: 2.375rem; font-size: 1.125rem; }
+/* who is watching, at the top: a little apart from the rest, like the profile in the TV app */
+.side-head { margin-bottom: 1rem; font-weight: 600; }
+.side-head.still .sv { margin-left: auto; }
+/* focused: the white pill with dark text */
+.side-row.focus {
+  background: #fff; color: #111; transform: scale(1.04);
+  box-shadow: 0 0.75rem 1.75rem rgba(0, 0, 0, 0.35);
+}
+.side-row.focus .sv { color: rgba(17, 17, 17, 0.6); }
+.side-row.focus .sic { background: rgba(17, 17, 17, 0.1); }
+.side-sec {
+  margin: 1.25rem 0.75rem 0.5rem; font-size: 1.1875rem; font-weight: 600; letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.5);
+}
+.side-sec:first-child { margin-top: 0.25rem; }
+.side-note { margin: 0.75rem 0.75rem 0; font-size: 1.25rem; color: rgba(255, 255, 255, 0.6); }
+
+/* Reduce Motion: the panel fades in place instead of sliding */
+html.calm .side-panel, html.calm.siding .side-panel { transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .side-panel, html.siding .side-panel { transform: none; }
+}

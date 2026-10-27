@@ -17,8 +17,8 @@ the clock behind your own photo, make a transparent cut-out of everything in fro
 | Night | Golden hour | Waterline |
 |---|---|---|
 | ![Night](docs/screens/home-night.jpg) | ![Golden hour](docs/screens/home-golden.jpg) | ![Waterline](docs/screens/home-water.jpg) |
-| **Fog** | **Dawn** | **Classic** (`?theme=classic`) |
-| ![Fog](docs/screens/home-fog.jpg) | ![Dawn](docs/screens/home-dawn.jpg) | ![Classic](docs/screens/home-classic.jpg) |
+| **Fog** | **Dawn** | |
+| ![Fog](docs/screens/home-fog.jpg) | ![Dawn](docs/screens/home-dawn.jpg) | |
 
 Shown with sample shows and sample people. On your TV, "keep watching" fills from what you
 actually watch.
@@ -41,7 +41,7 @@ and then closes. What you change shows when the list closes.
   Open-Meteo's, free and with no key.
 - **Weather:** show or hide it, °C or °F, check every 15, 30 or 60 minutes. Open-Meteo is the only
   weather provider for now.
-- **Look and scenes:** Night scenes or Classic; which scenes take turns, in what order, how many
+- **Look and scenes:** which scenes take turns, in what order, how many
   seconds each; a 12 or 24 hour clock; your own photos (below).
 - **Apps:** every app on the TV. OK moves it between home, More apps and hidden; hold OK to change
   the order. The same order as holding OK on the dock and the phone's Arrange apps.
@@ -55,8 +55,7 @@ and then closes. What you change shows when the list closes.
 and copies the photos you choose into the app (turned the right way up and sized for the screen).
 Many Android TV and Google TV builds have no file picker; then the list says so and you add a photo
 from a web address instead (a JPEG or PNG on the internet, which the TV loads each time). The on-TV
-app (option C) only takes web addresses. Your photos take turns with the scenes and replace the
-Classic look's own. Videos are not supported: a looping video under the glass clock and the
+app (option C) only takes web addresses. Your photos take turns with the scenes. Videos are not supported: a looping video under the glass clock and the
 blurred dock is heavy work for a small TV stick, and the clock's frosted fill is cut from a still
 photo.
 
@@ -470,8 +469,7 @@ TV home (tv-home/)      --->  bridge (for shows and picks)               (Androi
 ## Credits
 
 - The five scene backgrounds (`scene-*.jpg`) were generated for this project and are free to use.
-  The Classic look's photos are Creative Commons from Wikimedia Commons. Both are listed in
-  `tv-home/web/backgrounds/CREDITS.md`.
+  They are listed in `tv-home/web/backgrounds/CREDITS.md`.
 - The streaming app logos in `remote/src/app-logos/` belong to their owners.
 - Fonts: Inter and Antonio (both SIL Open Font Licence).
 - Show data and posters: JustWatch (credit them if you publish anything built on this).

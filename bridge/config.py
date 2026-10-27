@@ -174,7 +174,7 @@ def person_name(pid):
 
 # ---------- the home's look ----------
 SCENE_IDS = ["night", "golden", "water", "fog", "dawn"]
-DOCK_LIMIT = 10   # apps in the dock before Settings and More apps; 10 fills a 1080p screen
+DOCK_LIMIT = 11   # apps in the dock before More apps; 11 + More spans the TV home's Keep watching row
 
 
 def _int(value, default, lo, hi):

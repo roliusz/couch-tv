@@ -153,7 +153,7 @@ recommend C (A if they only want the home screen). Write the choice down; the re
 ### 2.3 How the home looks
 
 - Show them the pictures at the top of the README. "Do you want the five scenes taking turns, just
-  some of them, your own photos, or the Classic look?" Own photos: 1920x1080 JPEGs into
+  some of them, or your own photos?" Own photos: 1920x1080 JPEGs into
   `tv-home/web/backgrounds/`.
 - "How long should each scene stay?" (20 seconds is the default.)
 - "12 hour or 24 hour clock?"
@@ -175,10 +175,9 @@ The small buttons at the top of the home. Ask which they want, in order:
 - **Sleep timer** (turns the TV off after 15, 30, 60 or 90 minutes).
 - **Picture mode switch**: flips between two picture modes they choose. Ask which two (for example
   "Calibrated" and "Dynamic"). Only offer it if the TV shows those modes in its picture settings.
-- **Look switch**: flips between the scenes and the Classic look.
 - **Input switch**: opens the TV's input list (for a games console or a set top box).
-Option A has no bridge, so only the look switch works there, plus the input switch on TVs that
-have an input screen. Leave the rest off.
+Option A has no bridge, so only the input switch works there, on TVs that have an input
+screen. Leave the rest off.
 
 ### 2.6 Phone remote (options B and C)
 

@@ -5,13 +5,13 @@
 //
 // Presets for previews, all optional (see docs/CONFIG.md for what each setting means):
 //   people=0..8         that many sample people (default: Person 1 and Person 2)
-//   quick=sleep,look    tvs[].quick, in order (sleep, picture, look, input)
+//   quick=sleep,input   tvs[].quick, in order (sleep, picture, input)
 //   picture=1           this TV has a picture mode switch (Calibrated and Dynamic)
-//   look=classic        home.look       clock=24h   home.clock     dock=6   home.dock_size
+//   clock=24h           home.clock      dock=6         home.dock_size
 //   scenes=fog,dawn     home.scenes     secs=8      home.scene_seconds
 //   newapp=1            an app turns up that this TV has not seen before (the New dot)
 //   down                the bridge is not answering      offline=1   the saved copy, no bridge at all
-//   reset=1             forget everything this preview saved (orders, people, the look, Home settings)
+//   reset=1             forget everything this preview saved (orders, people, Home settings)
 (function () {
   var q = location.search;
   var arg = function (name) { var m = q.match(new RegExp("[?&]" + name + "=([^&]*)")); return m ? decodeURIComponent(m[1]) : null; };
@@ -35,7 +35,6 @@
   }
   if (arg("quick") !== null) cfg.tvs[0].quick = arg("quick").split(",").filter(Boolean);
   if (arg("picture")) cfg.tvs[0].picture_modes = ["Calibrated", "Dynamic"];
-  if (arg("look")) cfg.home.look = arg("look");
   if (arg("clock")) cfg.home.clock = arg("clock");
   if (arg("dock")) cfg.home.dock_size = parseInt(arg("dock"), 10);
   if (arg("scenes")) cfg.home.scenes = arg("scenes").split(",");

@@ -58,8 +58,8 @@ To remove only one app by hand, without the rest:
 
 ## With only the TV remote (no computer)
 
-1. On the couch-tv home, open the **Settings** tile (the gear at the end of the app row; in the
-   Classic look it is a tile in the grid). Or press the Settings button on your remote.
+1. On the couch-tv home, press Back (or Left on the first card or app) to open the sidebar, then
+   **TV settings**. Or press the Settings button on your remote.
 2. **Apps**, then **See all apps**, then **Show system apps**.
 3. Open **Google TV Home** (it says Disabled) and press **Enable**. Do the same for **Setup**.
    Ambient mode and the ad tracker are optional.

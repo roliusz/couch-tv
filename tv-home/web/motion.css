@@ -1,0 +1,58 @@
+/* Motion layer (fork addition). Kept out of app.css so upstream changes still merge cleanly.
+   Everything here is scoped to html.motion, which motion.js sets; without it the home looks and
+   moves exactly as upstream. In mock mode, M switches it on and off to compare, R tries Reduce
+   Motion. */
+
+/* Size and position of everything that takes focus are driven by motion.js's springs, so CSS
+   transitions on transform are switched off for them (they would fight the springs). The rest of
+   the focus look still fades, on Apple's split: gaining focus quicker than losing it. */
+html.motion :is(.tile, .person, .people.head, .qbtn, .prow, .grow, .ssec, .srow, .sleep-menu .opt, .side-row, .side-tab, .np-btn) {
+  transition-property: background, background-color, color, box-shadow, opacity !important;
+  transition-duration: 390ms !important;
+  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+}
+html.motion :is(.tile, .person, .people.head, .qbtn, .prow, .grow, .ssec, .srow, .sleep-menu .opt, .side-row, .side-tab, .np-btn):is(.focus, .lifted) {
+  transition-duration: 120ms !important;
+}
+/* Rows in a list, measured in tvOS 26 Settings: the white highlight is on the new row within a
+   frame and the old one fades out over about 0.1 s; it does not slide between rows. */
+html.motion :is(.prow, .grow, .ssec, .srow, .sleep-menu .opt, .side-row) { transition-duration: 110ms !important; }
+html.motion :is(.prow, .grow, .ssec, .srow, .sleep-menu .opt, .side-row):is(.focus, .lifted) { transition-duration: 30ms !important; }
+html.motion .tile .face { transition-duration: 390ms; }
+html.motion .tile.focus .face { transition-duration: 120ms; }
+
+/* Focus sizes measured from the same tvOS 26 capture: Home screen icons grow to 1.22 and stay
+   centred (no lift), content cards (the Aerials grid) to about 1.11, list rows barely at all. */
+html.motion.theme-night .app.focus:not(.lifted) { transform: scale(1.22); }
+html.motion .ncard.focus { transform: scale(1.1); }
+html.motion .side-row.focus { transform: scale(1.015); }
+html.motion .shelf-track { transition: none; }   /* the row scroll is a spring too */
+
+/* A focused tile stays still and has no shine: no idle sway and no light sweeping across it. */
+html.motion .tile.focus .face { animation: none; }
+html.motion .tile .face::after { display: none; }
+
+/* opening an app: its icon zooms up while the screen goes dark */
+.motion-veil {
+  position: fixed; inset: 0; z-index: 90; background: #000; opacity: 0; pointer-events: none;
+  transition: opacity 260ms ease-out;
+}
+.motion-veil.on { opacity: 1; transition: opacity 380ms cubic-bezier(0.4, 0, 0.6, 1) 90ms; }
+.motion-ghost {
+  position: fixed; z-index: 91; margin: 0; pointer-events: none; animation: none !important;
+  box-shadow: 0 2rem 4rem rgba(0, 0, 0, 0.5);
+}
+
+/* comparison badge, mock mode only */
+.motion-badge {
+  position: fixed; left: 50%; top: 2rem; z-index: 99; transform: translateX(-50%);
+  padding: 0.5rem 1.25rem; border-radius: 2rem; font-size: 1.25rem; font-weight: 600;
+  background: rgba(28, 24, 30, 0.8); color: #fff; opacity: 0; transition: opacity 300ms;
+  pointer-events: none;
+}
+.motion-badge.on { opacity: 1; }
+
+/* Reduce Motion (motion.js sets html.calm from the system setting, or R in the mock): focus
+   changes without movement, no sheen, no drifting photo. Fades stay: Apple's guidance is to
+   replace movement with fades, not to remove feedback. */
+html.motion.calm .bg img.on { animation: none; }
