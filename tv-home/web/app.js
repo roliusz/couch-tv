@@ -1182,7 +1182,15 @@
   // page only lists the scene names and shows how each run went. The mock has sample scenes.
   var HA_STATE = {}, HA_TIMERS = {};
   var HA_ICON = '<svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg>';
-  var MOCK_SCENES = [{ id: "scene.movie_night", name: "Movie night" }, { id: "scene.lights_off", name: "Lights off" }, { id: "scene.evening", name: "Evening" }];
+  // icons by name, written as in Home Assistant ("mdi:sofa" or "sofa"); drawn in the sidebar's
+  // own thin line style rather than copied from Material Design. Anything else: the light bulb.
+  var HA_ICONS = {
+    sofa: '<svg viewBox="0 0 24 24"><path d="M5 11V8.5A2.5 2.5 0 0 1 7.5 6h9A2.5 2.5 0 0 1 19 8.5V11"/><path d="M3.5 11A1.5 1.5 0 0 1 5 12.5V14h14v-1.5a1.5 1.5 0 0 1 3 0V17a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-4.5A1.5 1.5 0 0 1 3.5 11z"/><path d="M5 18v2M19 18v2"/></svg>',
+    "weather-sunset": '<svg viewBox="0 0 24 24"><path d="M2.5 18h19M7 18a5 5 0 0 1 10 0"/><path d="M12 7.5V10M5.3 11.3l1.8 1.8M18.7 11.3l-1.8 1.8M7.5 21h9"/></svg>',
+    moon: ICONS.moon, "weather-night": ICONS.moon
+  };
+  function haIcon(name) { return HA_ICONS[String(name || "").replace(/^mdi:/, "")] || HA_ICON; }
+  var MOCK_SCENES = [{ id: "script.good_morning", name: "Morning", icon: "mdi:weather-sunset" }, { id: "script.good_night", name: "Night", icon: "moon" }, { id: "script.sofa", name: "Sofa", icon: "mdi:sofa" }];
   function haScenes() {
     if (TV && TV.haScenes) { try { return JSON.parse(TV.haScenes()) || []; } catch (e) { return []; } }
     return MOCK ? MOCK_SCENES : [];
@@ -1260,7 +1268,7 @@
       rows.push({ title: t("home_scenes") });
       scenes.forEach(function (sc) {
         var st = HA_STATE[sc.id];
-        rows.push({ kind: "ha", id: sc.id, icon: HA_ICON, label: sc.name || sc.id,
+        rows.push({ kind: "ha", id: sc.id, icon: haIcon(sc.icon), label: sc.name || sc.id,
           value: st === "busy" ? "\u2026" : st === "fail" ? "!" : "", check: st === "ok" });
       });
     }

@@ -184,14 +184,15 @@ class MainActivity : Activity() {
 
     private fun ha(): JSONObject? = prefs.getString("ha", null)?.let { try { JSONObject(it) } catch (e: Exception) { null } }
 
-    /** Run a scene: POST /api/services/scene/turn_on, then tell the page how it went. */
+    /** Run a scene or a script: POST /api/services/<scene|script>/turn_on, then tell the page how it went. */
     private fun haRunScene(entity: String) {
         val h = ha() ?: return
-        if (!Regex("scene\\.[a-z0-9_]+").matches(entity)) return
+        if (!Regex("(scene|script)\\.[a-z0-9_]+").matches(entity)) return
+        val domain = entity.substringBefore('.')
         io.execute {
             var ok = false
             try {
-                val c = java.net.URL(h.getString("url").trimEnd('/') + "/api/services/scene/turn_on").openConnection() as HttpURLConnection
+                val c = java.net.URL(h.getString("url").trimEnd('/') + "/api/services/" + domain + "/turn_on").openConnection() as HttpURLConnection
                 c.requestMethod = "POST"; c.doOutput = true
                 c.connectTimeout = 4000; c.readTimeout = 8000
                 c.setRequestProperty("Authorization", "Bearer " + h.optString("token"))
