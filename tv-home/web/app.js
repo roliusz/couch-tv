@@ -638,6 +638,7 @@
     if (id === who) return;
     who = id; s = 0;
     try { localStorage.setItem("tvhome.who", who); } catch (e) {}
+    tellWho();
     if (!NOBODY) api("POST", "/api/who", { who: who }).catch(function () {});
     renderShelf();
   }
@@ -1107,6 +1108,10 @@
       var it = data.shows[s];
       if (!it) return;
       var resume = function () {
+        if (it.source === "tv") {   // fork: recorded on this TV; the app resumes the episode itself
+          if (!(TV && it.app && TV.launch(it.app.package)) && window.tvMotion) tvMotion.abort();
+          return;
+        }
         status(it.app ? t("opening_in", { title: it.title, app: it.app.name }) : t("opening", { title: it.title }), true);
         api("POST", "/api/continue/open", { id: it.id, who: NOBODY ? "both" : who }, 60000)
           .then(function (res) { status(res.note || ""); })
@@ -2253,6 +2258,28 @@
     }
   }
 
+  // ---- fork: Keep watching without a bridge. The launcher records what apps say is playing
+  // (WatchLog.kt) and hands the list over; each person sees what they watched, plus anything
+  // recorded before anyone was picked.
+  function tellWho() { try { if (TV && TV.setWho && !NOBODY) TV.setWho(who); } catch (e) {} }
+  function watchedShows() {
+    if (!TV || !TV.watched) return;
+    var list;
+    try { list = JSON.parse(TV.watched()); } catch (e) { return; }
+    var nameOf = function (pkg) {
+      var a = (data.apps || []).filter(function (x) { return x.package === pkg; })[0];
+      return a ? a.name : pkg;
+    };
+    var shows = list.map(function (e) {
+      return { id: e.id, title: e.title, episode_title: e.episode_title || null, season: e.season || null, episode: e.episode || null,
+        app: { package: e.package, name: nameOf(e.package) }, backdrop: e.art || null, progress: e.progress,
+        remaining_min: e.remaining_min || 0, who: e.who || null, source: "tv" };
+    });
+    PEOPLE.forEach(function (p) {
+      data.showsBy[p.id] = shows.filter(function (x) { return !x.who || x.who === p.id; }).slice(0, 12);
+    });
+  }
+
   function refresh() {
     // never reshuffle under something being moved, or under the settings screen
     if (lift || zone === "pmenu" || zone === "settings" || zone === "gear") return Promise.resolve();
@@ -2261,6 +2288,7 @@
       if (TV) data.apps = sortApps(nativeApps() || []);
       else if (window.MOCK_APPS) data.apps = sortApps(window.MOCK_APPS.slice());
       data.bridge = false;
+      watchedShows();
       detectNew();
       status(ALONE ? "" : t("computer_off"), true);
       render();
@@ -2312,6 +2340,7 @@
   window.tv = { back: function () { goHome(true); },
     home: function () { if (zone === "side") closeSide(); if (zone === "settings") closeSettings(); else goHome(); refresh(); },
     resume: function () { okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); },
+    watched: function () { if (OFFLINE) refresh(); },
     // the launcher's file picker has copied the chosen photos into its own storage (Home settings)
     photosAdded: function (names) { photosAdded(names); } };
 
@@ -2337,6 +2366,7 @@
     var cached = load();
     if (cached) { data.showsBy = cached.showsBy || data.showsBy; data.screens = cached.screens || []; data.order = cached.order || null; }
     setPeople(PEOPLE);   // the cache may predate someone new
+    tellWho();   // fork: the launcher tags what it records with whoever is watching
     if (OFFLINE) {   // no bridge: an order made with this TV's remote wins
       var lo = kept("tvhome.order.tv");
       if (lo && lo.packages) data.order = { saved: true, line: lo.line, packages: lo.packages };

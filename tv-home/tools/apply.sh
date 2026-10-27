@@ -88,6 +88,9 @@ echo "3/4  Making couch-tv the home and sending your settings"
 # Tell our home where the bridge is ("none" for option A) and hand it the settings from
 # config.json for its built-in copy. Force-stop first: a running home only reads "bridge".
 CFG64=$("$PY" "$HERE/home-config.py")
+# fork: Keep watching without a bridge reads what apps say is playing; that needs notification
+# access for the launcher's listener (WatchLog.kt). Granted here, taken back by undo.sh.
+"$PY" "$T" shell "cmd notification allow_listener app.couchtv.launcher/app.couchtv.launcher.NowListener" || true
 "$PY" "$T" shell "am force-stop app.couchtv.launcher; am start -n $HOME_ACT --es bridge ${BRIDGE_URL:-none} --es config_b64 $CFG64 ${TV_ID:+--es tv $TV_ID}"
 
 # Tell the bridge's daily guard what to keep switched off (a Google TV update can switch it back

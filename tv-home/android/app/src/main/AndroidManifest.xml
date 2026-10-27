@@ -37,6 +37,18 @@
         android:usesCleartextTraffic="true"
         android:supportsRtl="false">
 
+        <!-- fork: Keep watching without a bridge (WatchLog.kt). Notification access is granted by
+             apply.sh over ADB; the service only reads what apps say is playing. -->
+        <service
+            android:name=".NowListener"
+            android:exported="true"
+            android:label="Keep watching"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

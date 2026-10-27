@@ -104,6 +104,10 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        // Keep watching: the listener service normally runs on its own; start it here as well in
+        // case the system has not bound it yet, and refresh the row when something is recorded
+        if (!WatchLog.connected) WatchLog.start(this)
+        WatchLog.onChange = { main.post { js("window.tv && tv.watched && tv.watched()") } }
         resumed = true
         hideSystemBars()
         if (pageReady && offline && alone()) {
@@ -269,6 +273,11 @@ class MainActivity : Activity() {
                 val u = req.url
                 if (u.host == OFFLINE_HOST) return offlineFile(u.path ?: "")
                 if (u.host != "tvos.invalid") return null
+                if (u.pathSegments.firstOrNull() == "watch") {
+                    // Keep watching artwork the apps handed over (WatchLog)
+                    val f = WatchLog.artFile(this@MainActivity, u.lastPathSegment ?: "") ?: return null
+                    return WebResourceResponse("image/jpeg", null, f.inputStream())
+                }
                 if (u.pathSegments.firstOrNull() == "photo") {
                     // the household's own photos (Home settings), copied in by the file picker
                     val f = photoFile(u.lastPathSegment ?: "") ?: return null
@@ -487,6 +496,21 @@ class MainActivity : Activity() {
         fun removePhoto(name: String) {
             photoFile(name)?.delete()
         }
+
+        // fork: Keep watching without a bridge (WatchLog.kt)
+        @JavascriptInterface
+        fun watched(): String = WatchLog.load(this@MainActivity).toString()
+
+        @JavascriptInterface
+        fun watchAccess(): Boolean = WatchLog.connected
+
+        @JavascriptInterface
+        fun setWho(id: String) {
+            getSharedPreferences("page", MODE_PRIVATE).edit().putString("watch.who", id).apply()
+        }
+
+        @JavascriptInterface
+        fun forget(id: String) = WatchLog.forget(this@MainActivity, id)
     }
 
     // ---------------------------------------------------------------- the household's own photos

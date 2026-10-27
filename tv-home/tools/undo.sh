@@ -37,6 +37,8 @@ for p in $PKGS; do
     "$PY" "$T" shell "pm enable $p"
   fi
 done
+# fork: take back the launcher's notification access (Keep watching without a bridge)
+"$PY" "$T" shell "cmd notification disallow_listener app.couchtv.launcher/app.couchtv.launcher.NowListener" >/dev/null 2>&1 || true
 HOME_ACT=""
 [ -f "$HERE/../tvs/$TV_NAME.home" ] && HOME_ACT=$(cat "$HERE/../tvs/$TV_NAME.home")
 if [ -z "$HOME_ACT" ]; then
