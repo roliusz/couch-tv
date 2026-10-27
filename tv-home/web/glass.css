@@ -77,3 +77,14 @@
 .side-tab { position: relative; }
 .side-tab.focus::after { background: #fff; }
 .side-tab.on-light.focus::after { background: #1d1d1f; }
+
+/* The glass clock, sharper on the TV (which draws at 1080p and scales to its 4K panel): the
+   frosted fill stays, but the edge that gives the digits their shape is a clean 1px line (2 of the
+   TV's pixels) at 80% white instead of a faint 0.7px one, the wide soft drop shadow round the
+   digits goes (it read as haze), and the digits are drawn for geometric precision. The reflection
+   on the Waterline (.under) keeps its blur. */
+.gclock { text-rendering: geometricPrecision; -webkit-font-smoothing: antialiased; }
+.scene .gclock:not(.under) { filter: none; }
+.night .scene .gclock:not(.under) { filter: brightness(0.72); }
+.gclock:not(.under) .rim { -webkit-text-stroke-width: 1px; -webkit-text-stroke-color: rgba(255, 255, 255, 0.8); }
+.s-night .gclock:not(.under) .rim { -webkit-text-stroke-color: rgba(255, 228, 236, 0.8); }
