@@ -168,7 +168,40 @@ class MainActivity : Activity() {
             }
         }
         i.getStringExtra("tv")?.let { e.putString("tv", it) }
+        // fork: Home Assistant (address, the scenes to show, and the access token). Kept in the
+        // launcher; the page only gets the scene names and asks the launcher to run one.
+        i.getStringExtra("ha_b64")?.let {
+            try {
+                val json = String(android.util.Base64.decode(it, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                val o = JSONObject(json)
+                if (o.optString("url").startsWith("http")) e.putString("ha", json)
+            } catch (x: Exception) {}
+        }
         e.apply()
+    }
+
+    // ---------------------------------------------------------------- Home Assistant (fork)
+
+    private fun ha(): JSONObject? = prefs.getString("ha", null)?.let { try { JSONObject(it) } catch (e: Exception) { null } }
+
+    /** Run a scene: POST /api/services/scene/turn_on, then tell the page how it went. */
+    private fun haRunScene(entity: String) {
+        val h = ha() ?: return
+        if (!Regex("scene\\.[a-z0-9_]+").matches(entity)) return
+        io.execute {
+            var ok = false
+            try {
+                val c = java.net.URL(h.getString("url").trimEnd('/') + "/api/services/scene/turn_on").openConnection() as HttpURLConnection
+                c.requestMethod = "POST"; c.doOutput = true
+                c.connectTimeout = 4000; c.readTimeout = 8000
+                c.setRequestProperty("Authorization", "Bearer " + h.optString("token"))
+                c.setRequestProperty("Content-Type", "application/json")
+                c.outputStream.use { it.write(JSONObject().put("entity_id", entity).toString().toByteArray()) }
+                ok = c.responseCode in 200..299
+                c.disconnect()
+            } catch (e: Exception) {}
+            main.post { js("window.tv && tv.haDone && tv.haDone(" + JSONObject.quote(entity) + "," + ok + ")") }
+        }
     }
 
     // ---------------------------------------------------------------- finding the bridge
@@ -511,6 +544,13 @@ class MainActivity : Activity() {
 
         @JavascriptInterface
         fun forget(id: String) = WatchLog.forget(this@MainActivity, id)
+
+        // fork: Home Assistant scenes for the sidebar. Names only: the token stays in the launcher.
+        @JavascriptInterface
+        fun haScenes(): String = ha()?.optJSONArray("scenes")?.toString() ?: "[]"
+
+        @JavascriptInterface
+        fun haRun(entity: String) = haRunScene(entity)
     }
 
     // ---------------------------------------------------------------- the household's own photos

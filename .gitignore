@@ -37,3 +37,6 @@ platform-tools/
 *.bak-*
 *-backup-*
 .DS_Store
+# fork: Home Assistant address/scenes and its access token
+ha.json
+ha-token.txt

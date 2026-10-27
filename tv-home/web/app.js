@@ -1178,6 +1178,27 @@
     document.documentElement.classList.remove("gearing");
     if (zone === "gear") zone = "grid";
   }
+  // Home Assistant scenes (fork). The launcher keeps the address and token and makes the call; the
+  // page only lists the scene names and shows how each run went. The mock has sample scenes.
+  var HA_STATE = {}, HA_TIMERS = {};
+  var HA_ICON = '<svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg>';
+  var MOCK_SCENES = [{ id: "scene.movie_night", name: "Movie night" }, { id: "scene.lights_off", name: "Lights off" }, { id: "scene.evening", name: "Evening" }];
+  function haScenes() {
+    if (TV && TV.haScenes) { try { return JSON.parse(TV.haScenes()) || []; } catch (e) { return []; } }
+    return MOCK ? MOCK_SCENES : [];
+  }
+  function haRun(id) {
+    HA_STATE[id] = "busy"; clearTimeout(HA_TIMERS[id]);
+    if (zone === "side") renderSide();
+    if (TV && TV.haRun) TV.haRun(id);
+    else if (MOCK) setTimeout(function () { haDone(id, true); }, 500);
+  }
+  function haDone(id, ok) {
+    HA_STATE[id] = ok ? "ok" : "fail";
+    if (zone === "side") renderSide();
+    HA_TIMERS[id] = setTimeout(function () { delete HA_STATE[id]; if (zone === "side") renderSide(); }, ok ? 2500 : 5000);
+  }
+
   // Google Play (fork: the sidebar's Store): straight from the launcher, else through the bridge.
   function openStore() {
     opened(STORE_PKG);
@@ -1233,6 +1254,16 @@
       } else if (q === "picture") rows.push({ kind: "picture", icon: ICONS.picture, label: t("picture_mode"), value: picLabel() });
       else if (q === "input") rows.push({ kind: "input", icon: ICONS.input, label: t("input") });
     });
+    // fork: Home Assistant scenes (the launcher runs them; ha.json picks which)
+    var scenes = haScenes();
+    if (scenes.length) {
+      rows.push({ title: t("home_scenes") });
+      scenes.forEach(function (sc) {
+        var st = HA_STATE[sc.id];
+        rows.push({ kind: "ha", id: sc.id, icon: HA_ICON, label: sc.name || sc.id,
+          value: st === "busy" ? "\u2026" : st === "fail" ? "!" : "", check: st === "ok" });
+      });
+    }
     rows.push({ title: t("settings") });
     rows.push({ kind: "home-settings", icon: ICONS.sliders, label: t("gear_home") });
     rows.push({ kind: "tv-settings", icon: ICONS.gear, label: t("gear_tv") });
@@ -1335,6 +1366,7 @@
     if (r.kind === "picture") { togglePicture(); renderSide(); return; }
     if (r.kind === "input") { closeSide(); openInputs(); return; }
     if (r.kind === "store") { closeSide(); openStore(); return; }
+    if (r.kind === "ha") { haRun(r.id); return; }   // the sidebar stays open: run another, or go
     if (r.kind === "home-settings") { closeSide(); openSettings(); return; }
     if (r.kind === "tv-settings") { closeSide(); openTvSettings(); return; }
   }
@@ -2341,6 +2373,7 @@
     home: function () { if (zone === "side") closeSide(); if (zone === "settings") closeSettings(); else goHome(); refresh(); },
     resume: function () { okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); },
     watched: function () { if (OFFLINE) refresh(); },
+    haDone: function (id, ok) { haDone(id, ok); },
     // the launcher's file picker has copied the chosen photos into its own storage (Home settings)
     photosAdded: function (names) { photosAdded(names); } };
 

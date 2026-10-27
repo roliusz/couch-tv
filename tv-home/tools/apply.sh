@@ -88,11 +88,17 @@ echo "3/4  Making couch-tv the home and sending your settings"
 # Tell our home where the bridge is ("none" for option A) and hand it the settings from
 # config.json for its built-in copy. Force-stop first: a running home only reads "bridge".
 CFG64=$("$PY" "$HERE/home-config.py")
+# fork: Home Assistant scenes for the sidebar. ha.json (address and scenes) and ha-token.txt (the
+# long-lived access token, written by you, never printed) sit next to config.json; git ignores both.
+HA64=""
+if [ -f "$ROOT/ha.json" ] && [ -f "$ROOT/ha-token.txt" ]; then
+  HA64=$("$PY" -c 'import base64,json,sys; h=json.load(open(sys.argv[1])); h["token"]=open(sys.argv[2]).read().strip(); print(base64.b64encode(json.dumps(h,separators=(",",":")).encode()).decode())' "$ROOT/ha.json" "$ROOT/ha-token.txt")
+fi
 # fork: Keep watching without a bridge reads what apps say is playing; that needs notification
 # access for the launcher's listener (WatchLog.kt). Granted here, taken back by undo.sh.
 # (switched off and on again: after a reinstall Android keeps the access but stops running the service)
 "$PY" "$T" shell "cmd notification disallow_listener app.couchtv.launcher/app.couchtv.launcher.NowListener; cmd notification allow_listener app.couchtv.launcher/app.couchtv.launcher.NowListener" || true
-"$PY" "$T" shell "am force-stop app.couchtv.launcher; am start -n $HOME_ACT --es bridge ${BRIDGE_URL:-none} --es config_b64 $CFG64 ${TV_ID:+--es tv $TV_ID}"
+"$PY" "$T" shell "am force-stop app.couchtv.launcher; am start -n $HOME_ACT --es bridge ${BRIDGE_URL:-none} --es config_b64 $CFG64 ${HA64:+--es ha_b64 $HA64} ${TV_ID:+--es tv $TV_ID}"
 
 # Tell the bridge's daily guard what to keep switched off (a Google TV update can switch it back
 # on). Option A has no bridge, so no guard: run this script again after an update.
