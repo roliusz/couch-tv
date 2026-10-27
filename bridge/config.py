@@ -187,6 +187,7 @@ def _home(h):
     h = h if isinstance(h, dict) else {}
     scenes = [s for s in dict.fromkeys(h.get("scenes") or []) if s in SCENE_IDS] if isinstance(h.get("scenes"), list) else []
     hide = h.get("hide_packages") if isinstance(h.get("hide_packages"), list) else []
+    order = h.get("app_order") if isinstance(h.get("app_order"), list) else []
     return {
         # Android package names never shown on the home or in More apps (a maker's own clutter).
         "hide_packages": [p for p in dict.fromkeys(hide) if isinstance(p, str) and re.fullmatch(r"[A-Za-z0-9_.]{1,200}", p)],
@@ -195,6 +196,8 @@ def _home(h):
         "scene_seconds": _int(h.get("scene_seconds"), 20, 5, 3600),
         "clock": "24h" if str(h.get("clock")).lower() == "24h" else "12h",
         "dock_size": _int(h.get("dock_size"), DOCK_LIMIT, 1, DOCK_LIMIT),
+        # fork: the household's apps first in the dock, in this order (Android package names)
+        "app_order": [p for p in dict.fromkeys(order) if isinstance(p, str) and re.fullmatch(r"[A-Za-z0-9_.]{1,200}", p)],
         # the TV home's language until someone picks one in Home settings: en, es or es-MX
         "language": h.get("language") if h.get("language") in ("en", "es", "es-MX") else "en",
     }
