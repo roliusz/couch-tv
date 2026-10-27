@@ -169,6 +169,12 @@
     document.documentElement.classList.add("theme-night");   // fork: the Night look is the only look
     GRID_COLS = 12;
     DOCK_APPS = Math.max(1, Math.min(11, parseInt(HOME.dock_size, 10) || 11));
+    // fork: home.app_order lists the household's apps first, in that order (Android package names);
+    // the built-in order follows for anything not listed
+    if (Array.isArray(HOME.app_order)) {
+      var mine = HOME.app_order.filter(function (p) { return typeof p === "string"; });
+      APP_ORDER = mine.concat(APP_ORDER.filter(function (p) { return mine.indexOf(p) < 0; }));
+    }
     CLOCK24 = (ST.clock || HOME.clock) === "24h";
     (Array.isArray(HOME.hide_packages) ? HOME.hide_packages : []).forEach(function (p) {
       if (typeof p === "string" && HIDDEN.indexOf(p) < 0) HIDDEN.push(p);
