@@ -69,6 +69,7 @@
 .np-route svg { width: 2.125rem; height: 2.125rem; fill: none; stroke: rgba(255, 255, 255, 0.6); stroke-width: 1.8; stroke-linecap: round; }
 .np-route svg .fill { fill: rgba(255, 255, 255, 0.6); stroke: none; }
 .np svg.solid { fill: currentColor; stroke: none; }
+.np svg.glyph { fill: currentColor; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
 /* focused: the white circle behind the symbol, which turns dark */
 .np-btn.focus { background: #fff; color: #111; box-shadow: 0 0.75rem 1.75rem rgba(0, 0, 0, 0.35); transform: scale(1.08); }
 

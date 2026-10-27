@@ -24,6 +24,10 @@
 .side-tab.on-light.focus .sic { background: rgba(255, 255, 255, 0.16); }
 .side-tab .sic { margin: 0 -0.5rem 0 0.25rem; }
 .side-tab:empty { display: none; }
+/* Fog puts the date top left, under the person tab: an even gap above it (the tab) and below it
+   (the clock's digits), about 20px each */
+.scene-fog .date { top: 8.25rem; }
+
 /* Hidden while the sidebar is open. Never by fading the tab itself: Chrome stops a piece of glass
    seeing what is behind it while its element is below full opacity, so the glass would vanish
    and pop back. The text, the glass layers and the shadow fade instead. */
@@ -38,14 +42,11 @@ html.siding .side-tab { box-shadow: none; visibility: hidden; transition: visibi
   background: linear-gradient(90deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.25) 35%, rgba(0, 0, 0, 0) 65%);
   transition: opacity 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-/* The panel is Liquid Glass, Apple's "regular" variant (glass.css has the dock's "clear" one): a
-   sidebar carries a lot of text, so it blurs more and pulls the brightness of what is behind it
-   down for legibility, and being large it reads a little more opaque than the dock. The same edge
-   light as the dock gives it thickness: a lit top edge, light inside the top, shade inside the
-   bottom, and a hairline rim that catches the light at two corners (.side-panel::after). Its
-   corners are concentric with the rows: row radius 1.875rem (a capsule, as tvOS 26 draws list
-   rows) + padding 1.5rem. The rows sit well in from the edge, so a focused row is a pill inside
-   the glass rather than a bar across it. */
+/* The panel is Liquid Glass, Apple's "regular" variant: a sidebar carries a lot of text, so it
+   blurs more and pulls the brightness of what is behind it down for legibility. Its edge and
+   shadow are the shared soft ones (glass.css). Its corners are concentric with the rows: row
+   radius 1.875rem (a capsule, as tvOS 26 draws list rows) + padding 1.5rem. The rows sit well in
+   from the edge, so a focused row is a pill inside the glass rather than a bar across it. */
 .side-panel {
   position: absolute; top: 2.25rem; bottom: 2.25rem; left: 2.25rem; width: 21rem;
   padding: 1.5rem 1.5rem; border-radius: 3.375rem; overflow: hidden;
@@ -53,25 +54,11 @@ html.siding .side-tab { box-shadow: none; visibility: hidden; transition: visibi
     rgba(22, 20, 26, 0.3);
   -webkit-backdrop-filter: blur(2.25rem) saturate(180%) brightness(0.82);
   backdrop-filter: blur(2.25rem) saturate(180%) brightness(0.82);
-  box-shadow:
-    inset 0 0.09rem 0 rgba(255, 255, 255, 0.5),
-    inset 0 -0.06rem 0 rgba(255, 255, 255, 0.16),
-    inset 0 1.5rem 2rem -1.5rem rgba(255, 255, 255, 0.2),
-    inset 0 -2rem 2.5rem -2rem rgba(0, 0, 0, 0.3),
-    0 2rem 4rem rgba(0, 0, 0, 0.4),
-    0 0.25rem 0.75rem rgba(0, 0, 0, 0.18);
+  /* the same soft edge and shadow as the rest of the glass (glass.css) */
+  box-shadow: inset 1px 1px 0 var(--lg-highlight), inset 0 0 4px var(--lg-glow), var(--lg-shadow);
   /* closing: slides back out a little slower, like losing focus */
   transform: translateX(calc(-100% - 3rem)); opacity: 0;
   transition: transform 460ms cubic-bezier(0.4, 0, 0.2, 1), opacity 300ms ease-out 120ms;
-}
-.side-panel::after {
-  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; padding: 0.09rem;
-  background: linear-gradient(150deg,
-    rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.16) 12%, rgba(255, 255, 255, 0.04) 35%,
-    rgba(255, 255, 255, 0.04) 70%, rgba(255, 255, 255, 0.2) 90%, rgba(255, 255, 255, 0.5) 100%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
 }
 html.siding .side-dim { opacity: 1; }
 html.siding .side-panel {
@@ -85,8 +72,11 @@ html.siding .side-panel {
 /* While it is open the home steps back: the dark gradient behind the panel, and the text on the
    right dims. The glass pieces are not faded (Chrome would lose their glass mid-fade, see the tab
    above); only what is written on them is. */
-.clock, .shelf-head, .ncard > *, .np > *, .dock-ic { transition: opacity 360ms cubic-bezier(0.2, 0.8, 0.2, 1); }
-html.siding .clock, html.siding .shelf-head, html.siding .ncard > *, html.siding .np > *, html.siding .dock-ic { opacity: 0.55; }
+.clock, .shelf-head, .np > *, .dock-ic { transition: opacity 360ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+html.siding .clock, html.siding .shelf-head, html.siding .np > *, html.siding .dock-ic { opacity: 0.55; }
+/* the cards' bottom band blurs too, so they dim under a dark veil rather than by fading */
+.theme-night .ncard::after { transition: box-shadow 240ms var(--ease), background 360ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+html.siding .theme-night .ncard::after, html.siding.theme-night .ncard::after { background: rgba(0, 0, 0, 0.45); }
 
 .side-rows { display: flex; flex-direction: column; gap: 0.125rem; }
 .side-row {

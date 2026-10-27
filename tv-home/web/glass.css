@@ -1,5 +1,4 @@
-/* Liquid Glass (fork addition) for the dock, the Keep watching cards, the Now Playing card and the
-   person tab: one material
+/* Liquid Glass (fork addition) for the dock, the Now Playing card and the person tab: one material
    everywhere. The layers of the "liquid glass" CSS technique (codepen.io/lassiterda/pen/vEOpqMa),
    on each element's own ::before and ::after so no extra markup is needed:
      ::before  the filter: what is behind, bent by the SVG filter #lg-dist (index.html: fractal
@@ -19,7 +18,7 @@
   --lg-shadow: 0 4px 6px rgba(0, 0, 0, 0.12), 0 0 16px rgba(0, 0, 0, 0.06);
 }
 
-.theme-night .grid, .theme-night .ncard, .np, .side-tab {
+.theme-night .grid, .np, .side-tab {
   isolation: isolate;
   background: none !important; -webkit-backdrop-filter: none; backdrop-filter: none;
   box-shadow: var(--lg-shadow);
@@ -27,14 +26,14 @@
 .theme-night .grid { position: relative; }
 
 /* the filter */
-.theme-night .grid::before, .theme-night .ncard::before, .np::before, .side-tab::before {
+.theme-night .grid::before, .np::before, .side-tab::before {
   content: ""; position: absolute; inset: 0; z-index: -2; border-radius: inherit; overflow: hidden; pointer-events: none;
   -webkit-backdrop-filter: blur(0px); backdrop-filter: blur(0px);
   filter: url(#lg-dist);
   isolation: isolate;
 }
 /* the overlay and the specular edge */
-.theme-night .grid::after, .theme-night .ncard::after, .np::after, .side-tab::after {
+.theme-night .grid::after, .np::after, .side-tab::after {
   content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
   padding: 0; -webkit-mask: none; mask: none;
   background: var(--lg-bg-color);
@@ -45,25 +44,27 @@
 /* All three use the calmer settings: blurred so what sits on the glass reads on a calm surface, a
    gentle distortion (#lg-dist-sm) and a lighter wash. (The CodePen's stronger #lg-dist, blur 0 and
    25% wash, is kept in index.html and the variables above if the dock should ever go back to it.) */
-.theme-night .grid::before, .theme-night .ncard::before, .np::before, .side-tab::before {
+.theme-night .grid::before, .np::before, .side-tab::before {
   -webkit-backdrop-filter: blur(10px) saturate(150%); backdrop-filter: blur(10px) saturate(150%);
   filter: url(#lg-dist-sm);
 }
-.theme-night .grid::after, .theme-night .ncard::after, .np::after, .side-tab::after { background: rgba(255, 255, 255, 0.12); }
+.theme-night .grid::after, .np::after, .side-tab::after { background: rgba(255, 255, 255, 0.12); }
 
 /* the dock: corners concentric with the icons (icon radius 1.625rem + padding 2rem) */
 .theme-night .grid { padding: 2rem 2.25rem; border-radius: 3.625rem; }
+/* Keep watching sits on the dock: anchored to it from below, not placed from the top of the
+   screen, so it always keeps the same gap above the dock (bottom margin + the dock's 7rem icons and
+   2rem padding top and bottom + the gap). */
+:root { --dock-bottom: 2.875rem; --dock-h: 11rem; --dock-gap: 2.5rem; }
+.theme-night .apps { bottom: var(--dock-bottom); }
+.theme-night .shelf { top: auto; bottom: calc(var(--dock-bottom) + var(--dock-h) + var(--dock-gap)); }
+
 /* a full dock (and More apps) lines up with the Keep watching row, the same safe margins left and
    right, its icons spread evenly; a short one stays centred and only as wide as its apps */
 .theme-night .apps.fill { left: var(--safe-x); right: var(--safe-x); transform: none; }
 .theme-night .apps.fill .grid { justify-content: space-between; }
 .theme-night .app:not(.focus) .face img { filter: none; }
 .theme-night .app .face.tool { background: rgba(255, 255, 255, 0.18); box-shadow: inset 0 0.06rem 0 rgba(255, 255, 255, 0.35); }
-
-/* the Keep watching cards: corners concentric with the artwork (1rem + 1rem padding); focused, the
-   white ring around the glass as before */
-.theme-night .ncard { border-radius: 2rem; }
-.theme-night .ncard.focus { box-shadow: 0 0 0 0.1875rem #fff, 0 1.25rem 2.5rem rgba(0, 0, 0, 0.45); }
 
 /* the person tab: focused, the glass fills white (the overlay sits under the text) */
 .side-tab { position: relative; }

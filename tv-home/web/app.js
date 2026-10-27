@@ -665,16 +665,22 @@
       return;
     }
     {
-      // lock screen notifications: the first three shows as glass cards
-      data.shows = data.shows.slice(0, 3);
+      // fork: Apple TV's Continue Watching cards, five across the row: the artwork fills the card,
+      // the service's icon top right, and a blurred band at the bottom with the title, a play
+      // symbol, how far in, and the episode (keepwatching.css)
+      data.shows = data.shows.slice(0, 5);
       track.innerHTML = data.shows.map(function (it) {
         var art = it.backdrop || it.poster, pkg = it.app && it.app.package;
-        var ep = it.season && it.episode ? "S" + it.season + " E" + it.episode : (it.episode_title || "");
+        var ep = it.season && it.episode ? "S" + it.season + ", E" + it.episode : (it.app ? it.app.name : "");
+        var left = it.remaining_min || (it.runtime_min && it.progress ? Math.round(it.runtime_min * (1 - it.progress)) : 0);
+        var meta = ep + (left ? " \u00b7 " + (left >= 60 ? Math.floor(left / 60) + "h " + (left % 60) + "m" : left + "m") : "");
         return '<div class="tile ncard">' +
-          (art ? '<img class="thumb" src="' + esc(art) + '" alt="" decoding="async">' : '<span class="thumb none"></span>') +
-          '<div class="t"><div class="nap">' + (pkg && iconUrl(pkg) ? '<img src="' + esc(iconUrl(pkg)) + '" alt="" onerror="this.remove()">' : "") +
-          esc(it.app ? it.app.name : "") + "</div><b>" + esc(it.title) + "</b>" + (ep ? "<i>" + esc(ep) + "</i>" : "") +
-          (it.progress ? '<span class="nbar"><i style="width:' + Math.round(it.progress * 100) + '%"></i></span>' : "") + "</div></div>";
+          (art ? '<img class="nart" src="' + esc(art) + '" alt="" decoding="async">' : '<span class="nart none">' + esc(it.title) + "</span>") +
+          (pkg && iconUrl(pkg) ? '<img class="napp" src="' + esc(iconUrl(pkg)) + '" alt="" onerror="this.remove()">' : "") +
+          '<div class="nband"><b>' + esc(it.title) + '</b><div class="nmeta">' +
+            '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.8v14.4a1 1 0 0 0 1.5.86l11.6-7.2a1 1 0 0 0 0-1.72L8.5 3.94A1 1 0 0 0 7 4.8z"/></svg>' +
+            (it.progress ? '<span class="nbar"><i style="width:' + Math.max(4, Math.round(it.progress * 100)) + '%"></i></span>' : "") +
+            "<span>" + esc(meta) + "</span></div></div></div>";
       }).join("");
       shelfEls = Array.prototype.slice.call(track.children);
       return;
@@ -1335,8 +1341,11 @@
   var NP = null, npi = 1, npFrom = null, npTimer = null;
   var NP_ITEMS = ["prev", "play", "next"];
   var NP_ICONS = {
-    prev: '<svg viewBox="0 0 32 24" class="solid"><path d="M15 5.2v13.6a1 1 0 0 1-1.6.8L4.6 12.8a1 1 0 0 1 0-1.6l8.8-6.8a1 1 0 0 1 1.6.8zM29 5.2v13.6a1 1 0 0 1-1.6.8l-8.8-6.8a1 1 0 0 1 0-1.6l8.8-6.8a1 1 0 0 1 1.6.8z"/></svg>',
-    next: '<svg viewBox="0 0 32 24" class="solid"><path d="M3 5.2v13.6a1 1 0 0 0 1.6.8l8.8-6.8a1 1 0 0 0 0-1.6L4.6 4.4A1 1 0 0 0 3 5.2zM17 5.2v13.6a1 1 0 0 0 1.6.8l8.8-6.8a1 1 0 0 0 0-1.6l-8.8-6.8a1 1 0 0 0-1.6.8z"/></svg>',
+    // rewind and fast forward: two equal triangles with soft corners, the pair centred, then moved
+    // one unit against their heavy flat backs so they look centred in the focus circle (optical
+    // centring, as Apple's symbols do)
+    prev: '<svg viewBox="0 0 32 24" class="glyph"><path transform="translate(-1 0)" d="M15.5 5L3 12l12.5 7zM29 5L16.5 12 29 19z"/></svg>',
+    next: '<svg viewBox="0 0 32 24" class="glyph"><path transform="translate(1 0)" d="M3 5l12.5 7L3 19zM16.5 5L29 12l-12.5 7z"/></svg>',
     play: '<svg viewBox="0 0 24 24" class="solid"><path d="M6.5 4.6v14.8a1 1 0 0 0 1.5.9l12-7.4a1 1 0 0 0 0-1.8l-12-7.4a1 1 0 0 0-1.5.9z"/></svg>',
     pause: '<svg viewBox="0 0 24 24" class="solid"><rect x="5" y="3.5" width="4.6" height="17" rx="1.3"/><rect x="14.4" y="3.5" width="4.6" height="17" rx="1.3"/></svg>',
     route: '<svg viewBox="0 0 24 24"><path d="M6.3 16.6a8 8 0 1 1 11.4 0M8.7 14.3a4.6 4.6 0 1 1 6.6 0"/><path d="M12 14.5l4.2 5.5H7.8z" class="fill"/></svg>',

@@ -1,0 +1,64 @@
+/* Keep watching as Apple TV's Continue Watching cards (fork addition). app.js ("lock screen
+   notifications") builds them. Five across the row (5 x 20.5rem + 4 x 1.875rem = the row's
+   110rem). The artwork fills the card; the service's icon sits top right; a band at the bottom
+   blurs and darkens the artwork progressively and carries the title, a play symbol, how far in,
+   and the episode. Focused, the card grows (motion.js springs, 1.1 as measured on tvOS) and lifts
+   on a deeper shadow; no ring, as tvOS. Sizes at 1920x1080 (1rem = 16px). */
+
+.theme-night .shelf-track { gap: 1.875rem; }
+
+.theme-night .ncard {
+  position: relative; display: block; flex: none; width: 20.5rem; height: 14.375rem; padding: 0; gap: 0;
+  border-radius: 1.5rem; overflow: hidden;
+  background: #1c1c21 !important; -webkit-backdrop-filter: none; backdrop-filter: none;
+  box-shadow: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.3);
+  transition: box-shadow 240ms var(--ease);
+}
+.theme-night .ncard.focus { box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.5); }
+
+.ncard .nart { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ncard .nart.none {
+  display: flex; align-items: center; justify-content: center; padding: 1.5rem; text-align: center;
+  font-size: 1.75rem; font-weight: 700; color: rgba(255, 255, 255, 0.85);
+  background: linear-gradient(160deg, #3a3a44, #18181d);
+}
+
+/* the service, top right */
+.ncard .napp {
+  position: absolute; top: 0.875rem; right: 0.875rem; width: 2.25rem; height: 2.25rem; border-radius: 0.5rem;
+  object-fit: cover; box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.35);
+}
+
+/* the band: a progressive blur of the artwork, darkening towards the bottom */
+.ncard .nband { position: absolute; left: 0; right: 0; bottom: 0; padding: 2.75rem 1.25rem 1rem; color: #fff; }
+.ncard .nband::before {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.35) 45%, rgba(0, 0, 0, 0.55) 100%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%); backdrop-filter: blur(16px) saturate(140%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 50%); mask-image: linear-gradient(180deg, transparent 0%, #000 50%);
+}
+.ncard .nband { isolation: isolate; }
+.ncard .nband b {
+  display: block; font-size: 1.375rem; line-height: 1.75rem; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ncard .nmeta { display: flex; align-items: center; gap: 0.625rem; margin-top: 0.375rem; font-size: 1.1875rem; line-height: 1.5rem; font-weight: 600; color: rgba(255, 255, 255, 0.82); white-space: nowrap; }
+.ncard .nmeta svg { width: 1.125rem; height: 1.125rem; flex: none; fill: #fff; }
+.ncard .nmeta > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.ncard .nbar { position: static; display: block; flex: none; width: 3.5rem; height: 0.3125rem; margin: 0; border-radius: 0.3125rem; background: rgba(255, 255, 255, 0.35); overflow: hidden; }
+.ncard .nbar i { display: block; height: 100%; border-radius: inherit; background: rgba(255, 255, 255, 0.92); }
+
+/* a hairline of light round the edge; brighter on the focused card */
+.theme-night .ncard::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  transition: box-shadow 240ms var(--ease);
+}
+.theme-night .ncard.focus::after { box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.18); }
+
+/* The cards are taller than the old ones, so two scenes' clocks are lifted to end above the row
+   (about 520px down; the row's heading starts at 536px): Dawn moves its clock and date up, Fog's
+   large left-hand clock is a little smaller, starting below its date. */
+.s-dawn .gclock { top: 9.0625rem; }
+.scene-dawn .date { top: 5.75rem; }
+.s-fog .gclock { top: 11rem; font-size: 22.875rem; }
