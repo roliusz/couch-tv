@@ -1,9 +1,10 @@
 /* Liquid Glass (fork addition) for the dock, the Now Playing card and the person tab: one material
    everywhere. The layers of the "liquid glass" CSS technique (codepen.io/lassiterda/pen/vEOpqMa),
    on each element's own ::before and ::after so no extra markup is needed:
-     ::before  the filter: what is behind, bent by the SVG filter #lg-dist (index.html: fractal
-               noise, softened, used as a displacement map), so the scene refracts through the
-               glass rather than only blurring
+     ::before  the filter: what is behind, frosted, and bent only along the rounded rim by an SVG
+               displacement map drawn to the piece's size (lens.js), as Apple's glass: clear in the
+               middle, refracting at the edge. (The CodePen bent the whole surface with noise,
+               which looked blotchy over the darker scenes on the TV.)
      ::after   the overlay (a white wash) and the specular light along the inside edge
    with a soft shadow under the whole piece. The glass never changes with the scene; only the text
    on it does (adapt.js). */
@@ -29,7 +30,7 @@
 .theme-night .grid::before, .np::before, .side-tab::before {
   content: ""; position: absolute; inset: 0; z-index: -2; border-radius: inherit; overflow: hidden; pointer-events: none;
   -webkit-backdrop-filter: blur(0px); backdrop-filter: blur(0px);
-  filter: url(#lg-dist);
+  filter: var(--lens, none);
   isolation: isolate;
 }
 /* the overlay and the specular edge */
@@ -46,7 +47,7 @@
    25% wash, is kept in index.html and the variables above if the dock should ever go back to it.) */
 .theme-night .grid::before, .np::before, .side-tab::before {
   -webkit-backdrop-filter: blur(10px) saturate(150%); backdrop-filter: blur(10px) saturate(150%);
-  filter: url(#lg-dist-sm);
+  filter: var(--lens, none);   /* edge refraction drawn to each piece's size (lens.js) */
 }
 .theme-night .grid::after, .np::after, .side-tab::after { background: rgba(255, 255, 255, 0.12); }
 
@@ -64,6 +65,12 @@
 .theme-night .apps.fill { left: var(--safe-x); right: var(--safe-x); transform: none; }
 .theme-night .apps.fill .grid { justify-content: space-between; }
 .theme-night .app:not(.focus) .face img { filter: none; }
+/* The focused app: no white ring and no name underneath; it grows (motion.js) and lifts on a soft
+   shadow, nothing more */
+.theme-night .app.focus .face { box-shadow: 0 1.25rem 2.5rem rgba(0, 0, 0, 0.45); }
+.theme-night .app .label { display: none; }
+/* an app picked up to move (hold OK) keeps its white ring, so moving still reads clearly */
+.theme-night .app.lifted .face { box-shadow: 0 0 0 0.25rem #fff, 0 1.75rem 3rem rgba(0, 0, 0, 0.55); }
 .theme-night .app .face.tool { background: rgba(255, 255, 255, 0.18); box-shadow: inset 0 0.06rem 0 rgba(255, 255, 255, 0.35); }
 
 /* the person tab: focused, the glass fills white (the overlay sits under the text) */

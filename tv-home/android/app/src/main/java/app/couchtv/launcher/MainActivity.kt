@@ -676,14 +676,15 @@ class MainActivity : Activity() {
         sq.recycle()
     }
 
-    /** The app's square icon as a PNG, for the small badge on Keep watching tiles. */
+    /** The app's square icon as a PNG, for the dock and the Keep watching badges. 256 px (fork; was
+     *  128): the dock shows it at about 112 px and grows the focused one to 1.22, so 128 was stretched. */
     private fun iconImage(pkg: String): ByteArray? {
         icons[pkg]?.let { return it }
         val ri = tvApps().firstOrNull { it.activityInfo.packageName == pkg }
         val d = ri?.loadIcon(packageManager)
             ?: try { packageManager.getApplicationIcon(pkg) } catch (e: Exception) { return null }
-        val bmp = Bitmap.createBitmap(128, 128, Bitmap.Config.ARGB_8888)
-        d.setBounds(0, 0, 128, 128)
+        val bmp = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888)
+        d.setBounds(0, 0, 256, 256)
         d.draw(Canvas(bmp))
         val bytes = ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.PNG, 100, it); bmp.recycle() }.toByteArray()
         icons[pkg] = bytes
