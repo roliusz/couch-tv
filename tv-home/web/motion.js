@@ -243,8 +243,8 @@
   if (track) {
     var row = { springs: { x: new Spring(0) }, eps: { x: 0.1 }, wrote: "" };
     row.draw = function () {
-      row.wrote = "translateX(" + row.springs.x.x.toFixed(2) + "px)";
-      track.style.transform = row.wrote;
+      track.style.transform = "translateX(" + row.springs.x.x.toFixed(2) + "px)";
+      row.wrote = track.style.transform;   // as the browser keeps it ("0.00px" reads back "0px"), or it looks like a new target
     };
     new MutationObserver(function () {
       var tf = track.style.transform;

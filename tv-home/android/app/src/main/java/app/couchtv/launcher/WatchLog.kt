@@ -38,11 +38,13 @@ object WatchLog {
     private const val MIN_PLAY_MS = 120_000L       // played this long before it counts
     private const val MIN_LENGTH_MS = 8 * 60_000L  // shorter than this (when known): a clip or a song
     private const val DONE = 0.95                  // this far through: finished, drops off
-    // music and the TV's own players are not "watching"
+    // music, YouTube, live TV and the TV's own players are not "watching"
     private val SKIP = setOf(
         "app.couchtv.launcher", "com.google.android.youtube.tvmusic", "com.spotify.tv.android",
-        "com.google.android.apps.tv.launcherx", "com.sony.dtv.osat.music", "com.android.bluetooth"
+        "com.google.android.apps.tv.launcherx", "com.sony.dtv.osat.music", "com.android.bluetooth",
+        "com.google.android.youtube.tv", "com.google.android.tv"
     )
+    private fun skip(pkg: String) = pkg in SKIP || pkg.startsWith("com.sony.dtv.tv")
 
     private val main = Handler(Looper.getMainLooper())
     private var app: Context? = null
@@ -94,7 +96,7 @@ object WatchLog {
             controllers.remove(t); callbacks.remove(t)
         }
         for (c in list) {
-            if (c.sessionToken in controllers || c.packageName in SKIP) continue
+            if (c.sessionToken in controllers || skip(c.packageName)) continue
             val cb = object : MediaController.Callback() {
                 override fun onPlaybackStateChanged(state: PlaybackState?) { update(c) }
                 override fun onMetadataChanged(metadata: MediaMetadata?) { update(c) }

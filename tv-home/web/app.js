@@ -672,10 +672,9 @@
       return;
     }
     {
-      // fork: Apple TV's Continue Watching cards, five across the row: the artwork fills the card,
-      // the service's icon top right, and a blurred band at the bottom with the title, a play
-      // symbol, how far in, and the episode (keepwatching.css)
-      data.shows = data.shows.slice(0, 5);
+      // fork: Apple TV's Continue Watching cards, five in view and the rest scrolled to on the right
+      // (scrollShelf): the artwork fills the card, the service's icon top right, and a blurred band
+      // at the bottom with the title, a play symbol, how far in, and the episode (keepwatching.css)
       track.innerHTML = data.shows.map(function (it) {
         var art = it.backdrop || it.poster, pkg = it.app && it.app.package;
         var ep = it.season && it.episode ? "S" + it.season + ", E" + it.episode : (it.app ? it.app.name : "");
@@ -2366,7 +2365,9 @@
       var a = (data.apps || []).filter(function (x) { return x.package === pkg; })[0];
       return a ? a.name : pkg;
     };
-    var shows = list.map(function (e) {
+    // live TV and YouTube are not shows to come back to: left out
+    var NOT_SHOWS = /^(com\.google\.android\.youtube\.tv|com\.sony\.dtv\.tv.*|com\.google\.android\.tv)$/;
+    var shows = list.filter(function (e) { return !NOT_SHOWS.test(e.package || ""); }).map(function (e) {
       return { id: e.id, title: e.title, episode_title: e.episode_title || null, season: e.season || null, episode: e.episode || null,
         app: { package: e.package, name: nameOf(e.package) }, backdrop: e.art || null, progress: e.progress,
         remaining_min: e.remaining_min || 0, who: e.who || null, source: "tv", last_played: e.last_played || 0 };

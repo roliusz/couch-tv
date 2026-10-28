@@ -96,6 +96,8 @@
         if (path.indexOf("/api/continue") === 0) {
           var w = (path.match(/who=([^&]+)/) || [])[1];
           var ids = people().map(function (p) { return p.id; }), at = ids.indexOf(w), count = Math.max(1, ids.length);
+          // ?many: everyone has every show, twice over, so the row has more than fits (scrolling)
+          if (/[?&]many\b/.test(q)) return resolve({ ok: true, items: shows.concat(shows.map(function (x) { return Object.assign({}, x, { id: x.id + "b" }); })) });
           var mine = empty ? [] : shows.filter(function (x, i) { return w === "both" || at < 0 || i % count === at || count > shows.length; });
           return resolve({ ok: true, items: mine });
         }
