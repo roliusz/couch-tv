@@ -31,6 +31,7 @@ except ImportError:
     pass
 
 W, H = 1920, 1080
+FILL = 0
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "web", "backgrounds", "mine")
 
 
@@ -123,6 +124,17 @@ def sky_mask(img, step, far, floor=1.0, spread=6, paint=0.0, thin=0, smooth=0.0,
         sky = np.isin(lab, list(keep))
     fg = ~sky
     fg = ndimage.binary_opening(fg, iterations=1)
+    # narrow slivers of "sky" cutting down into the scenery (a snow face as smooth as the sky):
+    # filled, they are scenery (--fill: widest sliver, in pixels)
+    if FILL:
+        fg = ndimage.binary_closing(fg, structure=np.ones((1, FILL), bool), border_value=0) | fg
+        fg = ndimage.binary_closing(fg, structure=np.ones((FILL // 2, 1), bool), border_value=0) | fg
+    # scenery floating in the sky (stars, bits of cloud) is not scenery: only what reaches the
+    # bottom of the picture, or the sides, stays
+    lab, n = ndimage.label(fg)
+    if n:
+        edges = set(np.unique(lab[-1])) | set(np.unique(lab[:, 0])) | set(np.unique(lab[:, -1]))
+        fg = np.isin(lab, list(edges - {0}))
     # one pixel in from the edge: the skyline's last pixels are half sky and showed as a halo
     fg = ndimage.binary_erosion(fg, iterations=1, border_value=1)
     return ~fg
@@ -160,7 +172,9 @@ def main():
     ap.add_argument("--spread", type=int, default=6, help="how far the sky may spread sideways per row (around wires, posts)")
     ap.add_argument("--bright", type=float, default=1.3, help="how much brighter the clock's frosted fill is than the photo")
     ap.add_argument("--preview")
+    ap.add_argument("--fill", type=int, default=0, help="fill slivers of sky this narrow that cut down into the scenery, e.g. 40")
     o = ap.parse_args()
+    global FILL; FILL = o.fill
     os.makedirs(OUT, exist_ok=True)
     img = band(Image.open(o.photo), o.top)
     sky = sky_mask(img, o.step, o.far, o.floor, o.spread, o.paint, o.thin, o.smooth, o.treeline)
