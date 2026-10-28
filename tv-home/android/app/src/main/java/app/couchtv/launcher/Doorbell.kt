@@ -28,8 +28,9 @@ import java.util.concurrent.Executors
  * helper, camera, name). While the TV is on, the launcher looks at that helper every few seconds;
  * when it is on, a card with the door camera slides in at the top right over whatever is playing,
  * and goes when the helper goes off. The camera runs on a battery, so it shows snapshots (every two
- * seconds), as the dashboards do, not a live stream. The card never takes the remote: what is
- * playing keeps playing and is controlled as usual.
+ * seconds), as the dashboards do, not a live stream. Any button on the remote hides it (that
+ * press only hides it; the next one goes to what is playing again), and once hidden it stays
+ * hidden for that ring.
  *
  * Over other apps it needs "display over other apps", which apply.sh grants over ADB.
  */
@@ -42,6 +43,7 @@ object Doorbell {
     private var card: View? = null
     private var picture: ImageView? = null
     private var started = false
+    private var dismissed = false   // hidden with the remote: not again until the helper goes off
 
     fun start(ctx: Context) {
         app = ctx.applicationContext
@@ -77,7 +79,10 @@ object Doorbell {
                     c.disconnect(); s == "on"
                 } catch (e: Exception) { null }
                 if (on == null) return@execute   // Home Assistant not answering: leave things as they are
-                main.post { if (on && card == null) show(ctx, b) else if (!on && card != null) hide() }
+                main.post {
+                    if (!on) dismissed = false
+                    if (on && card == null && !dismissed) show(ctx, b) else if (!on && card != null) hide()
+                }
             }
         }
     }
@@ -127,13 +132,20 @@ object Doorbell {
             setPadding((16 * dp).toInt(), 0, (16 * dp).toInt(), (12 * dp).toInt())
         }
         frame.addView(label, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.START))
+        // it takes the remote while it is up, so a button press can hide it
+        frame.isFocusable = true
+        frame.setOnKeyListener { _, _, e ->
+            if (e.action == android.view.KeyEvent.ACTION_UP) { dismissed = true; hide() }
+            true
+        }
         val lp = WindowManager.LayoutParams(w, ht, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT).apply {
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT).apply {
             gravity = Gravity.TOP or Gravity.END
             x = (32 * dp).toInt(); y = (32 * dp).toInt()
         }
         try { wm.addView(frame, lp) } catch (e: Exception) { return }
+        frame.requestFocus()
         card = frame; picture = img
         frame.alpha = 0f; frame.translationY = -24 * dp; frame.scaleX = 0.96f; frame.scaleY = 0.96f
         frame.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f).setDuration(420)
