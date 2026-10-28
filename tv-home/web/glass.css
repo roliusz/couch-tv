@@ -87,3 +87,8 @@
 .night .scene .gclock:not(.under) { filter: brightness(0.72); }
 /* no outline round the digits at all: the frosted fill alone shapes them */
 .gclock:not(.under) .rim { -webkit-text-stroke-width: 0; }
+
+/* The photo stays still, as Apple TV's: no slow zoom ("drift" grew it to 1.1). On the TV the
+   drift stalled while nothing else moved and caught up when the row scrolled, so the background
+   seemed to magnify under the cards. */
+.bg img.on { animation: none; transform: none; }

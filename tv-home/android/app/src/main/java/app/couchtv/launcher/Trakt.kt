@@ -102,7 +102,7 @@ object Trakt {
     fun unlink(ctx: Context, who: String) {
         val w = safe(who) ?: return
         prefs(ctx).edit().remove("trakt.tok.$w").apply()
-        File(ctx.filesDir, "trakt-$w.json").delete()
+        File(ctx.filesDir, "upnext-$w.json").delete()
         main.post { onChange?.invoke(w) }
     }
 
@@ -135,7 +135,7 @@ object Trakt {
     /** The person's next episodes as last fetched; fetches again in the background when stale. */
     fun upNext(ctx: Context, who: String): String {
         val w = safe(who) ?: return "[]"
-        val f = File(ctx.filesDir, "trakt-$w.json")
+        val f = File(ctx.filesDir, "upnext-$w.json")
         val stale = !f.exists() || System.currentTimeMillis() - f.lastModified() > FRESH_MS
         if (stale && token(ctx, w) != null && busy.add(w)) io.execute {
             try { fetch(ctx, w)?.let { f.writeText(it.toString()); main.post { onChange?.invoke(w) } } }
@@ -146,12 +146,24 @@ object Trakt {
 
     private fun picture(o: JSONObject?): String? {
         val imgs = o?.optJSONObject("images") ?: return null
-        for (k in listOf("fanart", "thumb", "banner", "poster")) {
+        for (k in listOf("fanart", "thumb", "screenshot", "banner", "poster")) {
             val a = imgs.optJSONArray(k) ?: continue
             val u = a.optString(0).takeIf { it.isNotEmpty() } ?: continue
             return if (u.startsWith("http")) u else "https://$u"
         }
         return null
+    }
+
+    /** The show's wide artwork (no spoilers, unlike an episode still): from the watched list if it
+     *  carried pictures, else asked for, and remembered since a show's artwork rarely changes. */
+    private val showArt = HashMap<Long, String?>()
+    private fun art(ctx: Context, id: Long, show: JSONObject): String? {
+        picture(show)?.let { return it }
+        if (showArt.containsKey(id)) return showArt[id]
+        val (c, s) = call(ctx, "GET", "/shows/$id?extended=images")
+        val u = if (c == 200) picture(JSONObject(s)) else null
+        if (c == 200) showArt[id] = u
+        return u
     }
 
     private fun fetch(ctx: Context, who: String): JSONArray? {
@@ -182,7 +194,7 @@ object Trakt {
                 .put("season", next.optInt("season")).put("episode", next.optInt("number"))
                 .put("episode_title", next.optString("title").takeIf { it.isNotEmpty() && it != "null" } ?: JSONObject.NULL)
                 .put("network", show.optString("network"))
-                .put("art", picture(next) ?: picture(show) ?: JSONObject.NULL)
+                .put("art", art(ctx, id, show) ?: picture(next) ?: JSONObject.NULL)
                 .put("last_played", r.optString("last_watched_at")))
         }
         return out
