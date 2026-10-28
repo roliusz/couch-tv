@@ -680,7 +680,7 @@
         var art = it.backdrop || it.poster, pkg = it.app && it.app.package;
         var ep = it.season && it.episode ? "S" + it.season + ", E" + it.episode : (it.app ? it.app.name : "");
         var left = it.remaining_min || (it.runtime_min && it.progress ? Math.round(it.runtime_min * (1 - it.progress)) : 0);
-        var meta = ep + (left ? " \u00b7 " + (left >= 60 ? Math.floor(left / 60) + "h " + (left % 60) + "m" : left + "m") : "");
+        var meta = (it.next ? t("up_next") + " \u00b7 " : "") + ep + (left ? " \u00b7 " + (left >= 60 ? Math.floor(left / 60) + "h " + (left % 60) + "m" : left + "m") : "");
         return '<div class="tile ncard">' +
           (art ? '<img class="nart" src="' + esc(art) + '" alt="" decoding="async">' : '<span class="nart none">' + esc(it.title) + "</span>") +
           (pkg && iconUrl(pkg) ? '<img class="napp" src="' + esc(iconUrl(pkg)) + '" alt="" onerror="this.remove()">' : "") +
@@ -1211,6 +1211,28 @@
     HA_TIMERS[id] = setTimeout(function () { delete HA_STATE[id]; if (zone === "side") renderSide(); }, ok ? 2500 : 5000);
   }
 
+  // Trakt (fork): each person links their own account with a code (the launcher keeps the sign-in,
+  // Trakt.kt). The mock links after a few seconds and has one sample next episode.
+  var TRAKT_ICON = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 13.5l3 3 5.5-6.5M8 9.5l2.5 2.5"/></svg>';
+  var traktMock = { linked: {}, linking: {} };
+  function traktOn() {
+    if (TV && TV.traktState) { try { return JSON.parse(TV.traktState(who)).ready !== false; } catch (e) { return false; } }
+    return MOCK;
+  }
+  function traktState() {
+    if (TV && TV.traktState) { try { return JSON.parse(TV.traktState(who)); } catch (e) { return {}; } }
+    if (traktMock.linked[who]) return { linked: true, user: who + "_on_trakt" };
+    if (traktMock.linking[who]) return { linking: true, code: "8F3A C21D", url: "https://trakt.tv/activate" };
+    return { ready: true };
+  }
+  function traktLink() {
+    if (TV && TV.traktLink) { TV.traktLink(who); return; }
+    var w = who; traktMock.linking[w] = true;
+    setTimeout(function () { delete traktMock.linking[w]; traktMock.linked[w] = true; window.tv.trakt(w); }, 4000);
+  }
+  function traktCancel() { if (TV && TV.traktCancel) TV.traktCancel(who); else delete traktMock.linking[who]; }
+  function traktUnlink() { if (TV && TV.traktUnlink) TV.traktUnlink(who); else delete traktMock.linked[who]; }
+
   // Google Play (fork: the sidebar's Store): straight from the launcher, else through the bridge.
   function openStore() {
     opened(STORE_PKG);
@@ -1249,6 +1271,22 @@
       if (m) rows.push({ note: t("off_in", { m: m }) });
       return rows;
     }
+    if (SIDE.level === "trakt") {
+      var ts = traktState(), nm = peopleCount() ? PEOPLE[whoIndex()].name : "";
+      rows.push({ title: "Trakt" + (nm ? " \u00b7 " + nm : "") });
+      if (ts.linked) {
+        rows.push({ note: t("trakt_linked", { user: ts.user }) });
+        rows.push({ kind: "trakt-unlink", icon: TRAKT_ICON, label: t("trakt_unlink") });
+      } else if (ts.linking) {
+        rows.push({ note: t("trakt_go", { url: (ts.url || "https://trakt.tv/activate").replace(/^https?:\/\//, "") }) });
+        rows.push({ code: ts.code });
+        rows.push({ kind: "trakt-cancel", icon: TRAKT_ICON, label: t("trakt_cancel") });
+      } else {
+        rows.push({ note: t("trakt_about") });
+        rows.push({ kind: "trakt-start", icon: TRAKT_ICON, label: t("trakt_link") });
+      }
+      return rows;
+    }
     if (SIDE.level === "who") {
       rows.push({ title: t("who_watching") });
       PEOPLE.forEach(function (p) { rows.push({ kind: "pick", id: p.id, label: p.name, avatar: avatarHTML(p), check: p.id === who }); });
@@ -1277,6 +1315,10 @@
       });
     }
     rows.push({ title: t("settings") });
+    if (traktOn()) {
+      var tst = traktState();
+      rows.push({ kind: "trakt", icon: TRAKT_ICON, label: "Trakt", value: tst.linked ? tst.user : t("trakt_link_short") });
+    }
     rows.push({ kind: "home-settings", icon: ICONS.sliders, label: t("gear_home") });
     rows.push({ kind: "tv-settings", icon: ICONS.gear, label: t("gear_tv") });
     return rows;
@@ -1289,6 +1331,7 @@
     $("side-rows").innerHTML = rows.map(function (r) {
       if (r.title) return '<p class="side-sec">' + esc(r.title) + "</p>";
       if (r.note) return '<p class="side-note">' + esc(r.note) + "</p>";
+      if (r.code) return '<p class="side-code">' + esc(r.code) + "</p>";
       var f = sideFocusable(r) && k++ === SIDE.i;
       var cls = "side-row" + (r.head ? " side-head" : "") + (f ? " focus" : "") + (sideFocusable(r) ? "" : " still");
       return '<div class="' + cls + '">' + (r.avatar || (r.icon ? '<i class="sic">' + r.icon + "</i>" : "")) +
@@ -1357,6 +1400,11 @@
       return;
     }
     if (SIDE.level === "who") { sideLevel("main", 0); return; }
+    if (SIDE.level === "trakt") {
+      SIDE.level = "main";
+      sideLevel("main", Math.max(0, sideRows().map(function (r) { return r.kind; }).indexOf("trakt")));
+      return;
+    }
     closeSide();
   }
   function sideActivate() {
@@ -1379,6 +1427,10 @@
     if (r.kind === "input") { closeSide(); openInputs(); return; }
     if (r.kind === "store") { closeSide(); openStore(); return; }
     if (r.kind === "ha") { haRun(r.id); return; }   // the sidebar stays open: run another, or go
+    if (r.kind === "trakt") { sideLevel("trakt", 0); return; }
+    if (r.kind === "trakt-start") { traktLink(); renderSide(); return; }
+    if (r.kind === "trakt-cancel") { traktCancel(); renderSide(); return; }
+    if (r.kind === "trakt-unlink") { traktUnlink(); SIDE.i = 0; renderSide(); refresh(); return; }
     if (r.kind === "home-settings") { closeSide(); openSettings(); return; }
     if (r.kind === "tv-settings") { closeSide(); openTvSettings(); return; }
   }
@@ -2317,11 +2369,54 @@
     var shows = list.map(function (e) {
       return { id: e.id, title: e.title, episode_title: e.episode_title || null, season: e.season || null, episode: e.episode || null,
         app: { package: e.package, name: nameOf(e.package) }, backdrop: e.art || null, progress: e.progress,
-        remaining_min: e.remaining_min || 0, who: e.who || null, source: "tv" };
+        remaining_min: e.remaining_min || 0, who: e.who || null, source: "tv", last_played: e.last_played || 0 };
     });
     PEOPLE.forEach(function (p) {
-      data.showsBy[p.id] = shows.filter(function (x) { return !x.who || x.who === p.id; }).slice(0, 12);
+      var mine = shows.filter(function (x) { return !x.who || x.who === p.id; });
+      data.showsBy[p.id] = mergeTrakt(mine, traktNext(p.id)).slice(0, 12);
     });
+  }
+  // ---- fork: Trakt's next episode. For each show Trakt says comes next, the card reads "Next ·
+  // S2, E4"; a show the TV recorded more recently than Trakt last heard of it keeps the TV's card
+  // (it may still be mid-episode). The app comes from what the TV saw, else the show's network.
+  var NETWORK_APPS = [[/netflix/i, ["com.netflix.ninja"]], [/hbo|\bmax\b/i, ["com.wbd.stream"]],
+    [/apple/i, ["com.apple.atve.sony.appletv", "com.apple.atve.androidtv.appletv"]], [/disney/i, ["com.disney.disneyplus"]],
+    [/prime|amazon/i, ["com.amazon.amazonvideo.livingroom"]], [/youtube/i, ["com.google.android.youtube.tv"]],
+    [/paramount/i, ["com.cbs.ca", "com.cbs.ott"]], [/hulu/i, ["com.hulu.livingroomplus"]], [/peacock/i, ["com.peacocktv.peacockandroid"]]];
+  function appForNetwork(n) {
+    for (var i = 0; i < NETWORK_APPS.length; i++) {
+      if (!NETWORK_APPS[i][0].test(n || "")) continue;
+      var pk = NETWORK_APPS[i][1].filter(function (p) { return (data.apps || []).some(function (a) { return a.package === p; }); })[0];
+      if (pk) return { package: pk, name: (data.apps.filter(function (a) { return a.package === pk; })[0] || {}).name || n };
+    }
+    return null;
+  }
+  var MOCK_TRAKT = [{ id: "t1", title: "Slow Horses", season: 4, episode: 4, episode_title: "Hello Goodbye", network: "Apple TV+",
+    art: null, last_played: "2026-10-27T21:10:00.000Z" }];
+  function traktNext(pid) {
+    var list = [];
+    if (TV && TV.traktUpNext) { try { list = JSON.parse(TV.traktUpNext(pid)) || []; } catch (e) { list = []; } }
+    else if (MOCK && traktMock.linked[pid]) list = MOCK_TRAKT;
+    return list.map(function (e) {
+      return { id: e.id, title: e.title, season: e.season, episode: e.episode, episode_title: e.episode_title || null,
+        app: appForNetwork(e.network), backdrop: e.art || null, progress: null, next: true, source: "tv",
+        last_played: Date.parse(e.last_played) || 0 };
+    });
+  }
+  function mergeTrakt(mine, next) {
+    var key = function (x) { return String(x.title || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); };
+    var when = function (x) { return typeof x.last_played === "string" ? (Date.parse(x.last_played) || 0) : (x.last_played || 0); };
+    var out = mine.slice();
+    next.forEach(function (n) {
+      var i = -1;
+      out.forEach(function (x, j) { if (i < 0 && key(x) === key(n)) i = j; });
+      if (i < 0) { out.push(n); return; }
+      var tv = out[i];
+      if (when(tv) > n.last_played) return;   // watched here since Trakt last heard
+      n.app = tv.app || n.app; n.backdrop = n.backdrop || tv.backdrop;
+      out[i] = n;
+    });
+    return out.sort(function (a, b) { return when(b) - when(a); });
   }
 
   function refresh() {
@@ -2342,7 +2437,7 @@
     var jobs = [
       people.then(function () {
         return Promise.all(PEOPLE.map(function (p) {
-          return api("GET", "/api/continue?who=" + p.id, null, 9000).then(function (j) { data.showsBy[p.id] = (j.items || []).slice(0, 12); });
+          return api("GET", "/api/continue?who=" + p.id, null, 9000).then(function (j) { data.showsBy[p.id] = mergeTrakt((j.items || []).slice(0, 12), traktNext(p.id)).slice(0, 12); });
         }));
       }),
       api("GET", "/api/screens").then(function (j) { data.screens = j.screens || []; }),
@@ -2386,6 +2481,7 @@
     resume: function () { okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); },
     watched: function () { if (OFFLINE) refresh(); },
     haDone: function (id, ok) { haDone(id, ok); },
+    trakt: function (w) { if (zone === "side") renderSide(); if (OFFLINE || MOCK) refresh(); },
     // the launcher's file picker has copied the chosen photos into its own storage (Home settings)
     photosAdded: function (names) { photosAdded(names); } };
 

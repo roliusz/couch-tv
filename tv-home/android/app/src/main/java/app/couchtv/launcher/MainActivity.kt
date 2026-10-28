@@ -108,6 +108,7 @@ class MainActivity : Activity() {
         // case the system has not bound it yet, and refresh the row when something is recorded
         if (!WatchLog.connected) WatchLog.start(this)
         WatchLog.onChange = { main.post { js("window.tv && tv.watched && tv.watched()") } }
+        Trakt.onChange = { who -> js("window.tv && tv.trakt && tv.trakt(" + JSONObject.quote(who) + ")") }
         resumed = true
         hideSystemBars()
         if (pageReady && offline && alone()) {
@@ -175,6 +176,13 @@ class MainActivity : Activity() {
                 val json = String(android.util.Base64.decode(it, android.util.Base64.DEFAULT), Charsets.UTF_8)
                 val o = JSONObject(json)
                 if (o.optString("url").startsWith("http")) e.putString("ha", json)
+            } catch (x: Exception) {}
+        }
+        // fork: the Trakt API app (client ID and secret) for "next episode" (Trakt.kt)
+        i.getStringExtra("trakt_b64")?.let {
+            try {
+                val json = String(android.util.Base64.decode(it, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                if (JSONObject(json).optString("client_id").isNotEmpty()) e.putString("trakt", json)
             } catch (x: Exception) {}
         }
         e.apply()
@@ -552,6 +560,22 @@ class MainActivity : Activity() {
 
         @JavascriptInterface
         fun haRun(entity: String) = haRunScene(entity)
+
+        // fork: Trakt next episodes (Trakt.kt). Tokens stay in the launcher.
+        @JavascriptInterface
+        fun traktState(who: String): String = Trakt.state(this@MainActivity, who)
+
+        @JavascriptInterface
+        fun traktLink(who: String) = Trakt.link(this@MainActivity, who)
+
+        @JavascriptInterface
+        fun traktCancel(who: String) = Trakt.cancel(who)
+
+        @JavascriptInterface
+        fun traktUnlink(who: String) = Trakt.unlink(this@MainActivity, who)
+
+        @JavascriptInterface
+        fun traktUpNext(who: String): String = Trakt.upNext(this@MainActivity, who)
     }
 
     // ---------------------------------------------------------------- the household's own photos

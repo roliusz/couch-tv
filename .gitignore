@@ -40,3 +40,5 @@ platform-tools/
 # fork: Home Assistant address/scenes and its access token
 ha.json
 ha-token.txt
+# fork: the Trakt API app's ID and secret
+trakt.json
