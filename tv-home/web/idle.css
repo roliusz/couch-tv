@@ -45,9 +45,13 @@
 .theme-night.idle.np-wide .np { translate: 0 0; }
 .theme-night.idle.np-wide.np-below .np { translate: 0 14rem; transition: none; }
 .theme-night.np-up .np { translate: 0 -26rem; transition: none; }
-.np-wide .np-top { flex: 0 1 38rem; min-width: 0; }
+/* the top row's two parts take their own places: song on the left, the level meter by the controls */
+.np-wide .np-top { display: contents; }
+.np-wide .np-info { order: 1; flex: 0 1 34rem; min-width: 0; }
+.np-wide .np-time { order: 2; }
+.np-wide .np-level { order: 3; margin: 0; }
+.np-wide .np-ctl { order: 4; }
 .np-wide .np-art { width: 6.5rem; height: 6.5rem; border-radius: 1.25rem; }
 .np-wide .np-time { flex: 1; margin-top: 0; }
 .np-wide .np-ctl { flex: none; margin-top: 0; gap: 1.5rem; }
 .np-wide .np-route { position: static; margin-left: 0.75rem; }
-.np-wide .np-info { flex: 0 1 auto; }
