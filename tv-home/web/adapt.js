@@ -68,7 +68,8 @@
   }
 
   function check() {
-    var ok = drawScene();
+    // the top shelf (a show's artwork, darkened at the top) is behind the glass: white text
+    var ok = !document.documentElement.classList.contains("shelfing") && drawScene();
     TARGETS.forEach(function (id) {
       var el = document.getElementById(id);
       if (!el) return;

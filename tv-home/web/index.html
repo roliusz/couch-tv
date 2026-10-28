@@ -9,12 +9,17 @@
 <link rel="stylesheet" href="glass.css">
 <link rel="stylesheet" href="sidebar.css">
 <link rel="stylesheet" href="nowplaying.css">
+<link rel="stylesheet" href="topshelf.css">
+<link rel="stylesheet" href="idle.css">
 <link rel="stylesheet" href="keepwatching.css">
 <link rel="stylesheet" href="motion.css">
 </head>
 <body>
 <!-- Night look only: five scenes that take turns (photo, glass clock, the cut-out in front), built by app.js -->
 <div class="scenes" id="scenes" aria-hidden="true"></div>
+<!-- fork: Apple TV's top shelf: the focused Keep watching show fills the screen (app.js, topshelf.css) -->
+<div class="topshelf" id="topshelf" aria-hidden="true"><img class="ts-pic" alt=""><img class="ts-pic" alt=""><div class="ts-shade"></div>
+  <div class="ts-info"><h1 class="ts-title"></h1><p class="ts-meta"></p></div></div>
 <div class="scrim" aria-hidden="true"></div>
 
 <header class="top">

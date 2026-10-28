@@ -131,6 +131,19 @@ class MainActivity : Activity() {
         main.removeCallbacks(npPoll)
     }
 
+    // fork: while another app is in front the home is hidden, so its page is too: the web view
+    // stops drawing and its timers (scene changes, the clock, animations) stop, and it lets go of
+    // what it had drawn. That memory and time go to the app being watched. Back home, it carries on.
+    override fun onStop() {
+        super.onStop()
+        web?.let { it.onPause(); it.pauseTimers() }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        web?.let { it.resumeTimers(); it.onResume() }
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         // Every kind of remote: game controller A, Select and the number pad's Enter count as OK,
         // controller B and Escape as BACK. The page then only has to know OK and BACK.

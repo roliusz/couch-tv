@@ -86,9 +86,10 @@
     }
     if (el.style.getPropertyValue("--lens") === "") el.style.setProperty("--lens", "url(#" + p.id + ")");
     var im = f.querySelectorAll("feImage"), top = im[0], mid = im[1], bot = im[2];
-    // the filter's area reaches past the piece, so nothing of the glass is ever cut away
-    f.setAttribute("x", "-2000"); f.setAttribute("y", "-2000");
-    f.setAttribute("width", w + 4000); f.setAttribute("height", h + 4000);
+    // the filter's area a little past the piece (it follows every change of size, so it never
+    // needs more: a wide margin made the browser keep a needlessly large picture of it)
+    f.setAttribute("x", "-40"); f.setAttribute("y", "-40");
+    f.setAttribute("width", w + 80); f.setAttribute("height", h + 80);
     if (p.shape !== shape) {
       p.shape = shape;
       if (split) {

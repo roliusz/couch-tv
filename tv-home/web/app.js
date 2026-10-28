@@ -350,6 +350,12 @@
     drawClocks(el, s, glassShown);
   }
 
+  function unreadyScene(el) {
+    el.classList.remove("ready");
+    [].forEach.call(el.querySelectorAll("img"), function (im) { im.removeAttribute("src"); });
+    [].forEach.call(el.querySelectorAll(".gclock"), function (c) { c.innerHTML = ""; });
+  }
+
   function drawClocks(el, s, hm) {
     if (!hm) return;
     var cs = el.querySelectorAll(".gclock");
@@ -391,7 +397,8 @@
     // after the fade, stop drawing the old one and get the next one ready
     setTimeout(function () {
       var next = (scene + 1) % SCENES.length;
-      sceneEls.forEach(function (el, k) { if (k !== scene && k !== next) el.classList.remove("ready"); });
+      // the others let go of their pictures too (only hidden, they stayed decoded in memory)
+      sceneEls.forEach(function (el, k) { if (k !== scene && k !== next && el.classList.contains("ready")) unreadyScene(el); });
       readyScene(next);
     }, 2000);
   }
@@ -955,7 +962,47 @@
   function peopleOn() { return peopleCount() >= 2 && shelfOn(); }
   function toPeople() { zone = "people"; pi = whoIndex(); }
 
+  // ---- fork: the top shelf. Resting on a Keep watching card, its show fills the screen behind the
+  // home, as on Apple TV: the artwork (Trakt's full size where it has one), the title and what is
+  // next, with the scene's clock and date faded away. Moving along the row crossfades from show to
+  // show once focus has settled for a moment; leaving the row brings the scene back.
+  var TS = { timer: null, on: false, front: 0, url: "" };
+  function bigArt(u) { return /media\.trakt\.tv\/.*\/medium\//.test(u || "") ? u.replace("/medium/", "/full/") : u; }
+  function topShelf() {
+    clearTimeout(TS.timer);
+    var it = zone === "shelf" && !expanded ? data.shows[s] : null, art = it && (it.backdrop || it.poster);
+    if (!art) { topShelfOff(); return; }
+    TS.timer = setTimeout(function () { topShelfShow(it, art); }, TS.on ? 250 : 450);
+  }
+  function topShelfShow(it, art) {
+    var box = $("topshelf"), pics = box.querySelectorAll(".ts-pic"), url = bigArt(art);
+    var ep = it.season && it.episode ? "S" + it.season + ", E" + it.episode : "";
+    box.querySelector(".ts-title").textContent = it.title || "";
+    box.querySelector(".ts-meta").textContent = [it.next ? t("up_next") : "", ep, it.episode_title || "", it.app ? it.app.name : ""]
+      .filter(Boolean).join(" \u00b7 ");
+    if (url !== TS.url) {
+      TS.url = url;
+      var back = pics[TS.front], next = pics[1 - TS.front];
+      next.onload = function () { next.classList.add("on"); back.classList.remove("on"); TS.front = 1 - TS.front; };
+      next.onerror = function () { if (next.src !== art) next.src = art; };   // no full size: the card's own
+      next.src = url;
+    }
+    if (!TS.on) { TS.on = true; document.documentElement.classList.add("shelfing"); if (window.tvAdapt) tvAdapt(); }
+  }
+  function topShelfOff() {
+    if (!TS.on) return;
+    TS.on = false; TS.url = "";
+    document.documentElement.classList.remove("shelfing");
+    if (window.tvAdapt) tvAdapt();
+    // after the fade, let go of the pictures
+    setTimeout(function () {
+      if (TS.on) return;
+      [].forEach.call($("topshelf").querySelectorAll(".ts-pic"), function (im) { im.classList.remove("on"); im.onload = null; im.removeAttribute("src"); });
+    }, 900);
+  }
+
   function paintFocus() {
+    topShelf();
     if (zone === "settings") { renderSettings(); return; }
     clearFocus();
     renderHint();
@@ -2336,6 +2383,38 @@
   // and, later, the release. One press is one action: a pick-up never also opens the app.
   var okDown = false, okHeld = false, okTimer = null;
   function okReset() { okDown = false; okHeld = false; clearTimeout(okTimer); }
+  // ---- fork: resting. The panel is OLED, and the home's dock, cards and glass would otherwise sit
+  // in one place for hours. After a few minutes with no key (home.idle_minutes, 3 by default) they
+  // slide off the screen and the scene dims a little and drifts a few pixels, slowly, while the
+  // scenes keep taking turns (idle.css). The first key only brings the home back.
+  var idleTimer = null, idleUp = false;
+  function isIdle() { return document.documentElement.classList.contains("idle"); }
+  function goIdle() {
+    if (!/^(grid|shelf|tab|np)$/.test(zone) || expanded || lift) { idleSoon(); return; }
+    topShelfOff();
+    document.documentElement.classList.add("idle");
+  }
+  function idleSoon() { clearTimeout(idleTimer); idleTimer = setTimeout(goIdle, Math.max(1, parseFloat(HOME.idle_minutes) || 3) * 60000); }
+  function wake() {
+    if (!isIdle()) { idleSoon(); return false; }
+    document.documentElement.classList.remove("idle");
+    idleSoon();
+    paintFocus();
+    return true;
+  }
+  window.addEventListener("keydown", function (e) {
+    if (!isIdle()) { idleSoon(); return; }
+    e.preventDefault(); e.stopImmediatePropagation();
+    idleUp = true;
+    wake();
+  }, true);
+  window.addEventListener("keyup", function (e) {
+    if (!idleUp) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    idleUp = false;
+  }, true);
+  idleSoon();
+
   document.addEventListener("keydown", function (e) {
     if (typingKey(e)) return;   // typing a place or a name: the keys belong to the text box
     if (isOk(e)) {
@@ -2548,8 +2627,8 @@
   // the native side calls these
   // Home on the remote also re-reads the lists, so an order arranged on the phone shows straight away
   window.tv = { back: function () { goHome(true); },
-    home: function () { if (zone === "side") closeSide(); if (zone === "settings") closeSettings(); else goHome(); refresh(); },
-    resume: function () { okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); },
+    home: function () { wake(); if (zone === "side") closeSide(); if (zone === "settings") closeSettings(); else goHome(); refresh(); },
+    resume: function () { wake(); okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); },
     watched: function () { if (OFFLINE) refresh(); },
     haDone: function (id, ok) { haDone(id, ok); },
     trakt: function (w) { if (zone === "settings") renderSettings(); if (OFFLINE || MOCK) refresh(); },
