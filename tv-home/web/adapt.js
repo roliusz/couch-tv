@@ -5,7 +5,7 @@
 // .on-light on it; nowplaying.css and sidebar.css hold the dark text. The glass itself never
 // changes: only what is written on it does.
 (function () {
-  var TARGETS = ["side-tab", "np"];
+  var TARGETS = ["side-tab", "np", "vpn-chip"];
   // Dark text only where white really stops reading: a near-white sky (lightness above 0.86 of 1,
   // as Fog). It goes back to white below 0.82, apart so a sky on the edge does not flicker.
   var LIGHT = 0.86, DARK = 0.82;

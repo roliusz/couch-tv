@@ -2431,6 +2431,7 @@
     if (!isIdle()) { idleSoon(); return false; }
     document.documentElement.classList.remove("idle");
     idleSoon();
+  try { if (TV && TV.vpn) document.documentElement.classList.toggle("vpn-on", !!TV.vpn()); } catch (e) {}
     paintFocus();
     return true;
   }
@@ -2663,6 +2664,7 @@
   // the native side calls these
   // Home on the remote also re-reads the lists, so an order arranged on the phone shows straight away
   window.tv = { back: function () { goHome(true); },
+    vpn: function (on) { document.documentElement.classList.toggle("vpn-on", !!on); if (window.tvAdapt) tvAdapt(); },
     home: function () { wake(); if (zone === "side") closeSide(); if (zone === "settings") closeSettings(); else goHome(); refresh(); },
     resume: function () { wake(); okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); },
     watched: function () { if (OFFLINE) refresh(); },

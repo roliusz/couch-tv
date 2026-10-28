@@ -85,6 +85,17 @@ class MainActivity : Activity() {
                     main.post { if (loadFailed || offline) connect() }
                 }
             })
+        // fork: whether a VPN is on (NordVPN), for the small VPN symbol by the person tab
+        getSystemService(android.net.ConnectivityManager::class.java)?.registerNetworkCallback(
+            android.net.NetworkRequest.Builder()
+                .addTransportType(android.net.NetworkCapabilities.TRANSPORT_VPN)
+                .removeCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN).build(),
+            object : android.net.ConnectivityManager.NetworkCallback() {
+                private val up = HashSet<android.net.Network>()
+                private fun tell() { val on = up.isNotEmpty(); main.post { vpnOn = on; js("window.tv && tv.vpn && tv.vpn($on)") } }
+                override fun onAvailable(network: android.net.Network) { up.add(network); tell() }
+                override fun onLost(network: android.net.Network) { up.remove(network); tell() }
+            })
         // Load the last bridge that worked straight away; only probe the others if it fails.
         val saved = prefs.getString("bridge", null)
         if (saved != null) showWeb(saved) else connect()
@@ -240,6 +251,7 @@ class MainActivity : Activity() {
     // and handed to the page's Now Playing card; nothing playing hides it. The page's controls come
     // back here as Home Assistant's media_player services.
     private var npShown: String? = null
+    @Volatile private var vpnOn = false
     private var npEntity: String? = null
     private val npPoll = object : Runnable {
         override fun run() {
@@ -667,6 +679,8 @@ class MainActivity : Activity() {
         fun haRun(entity: String) = haRunScene(entity)
         @JavascriptInterface
         fun haPlayer(action: String) = main.post { this@MainActivity.haPlayer(action) }
+        @JavascriptInterface
+        fun vpn(): Boolean = vpnOn
 
         // fork: Trakt next episodes (Trakt.kt). Tokens stay in the launcher.
         @JavascriptInterface

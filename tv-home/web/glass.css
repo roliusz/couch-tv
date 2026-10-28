@@ -19,7 +19,7 @@
   --lg-shadow: 0 4px 6px rgba(0, 0, 0, 0.12), 0 0 16px rgba(0, 0, 0, 0.06);
 }
 
-.theme-night .grid, .np, .side-tab {
+.theme-night .grid, .np, .side-tab, .vpn-chip {
   isolation: isolate;
   background: none !important; -webkit-backdrop-filter: none; backdrop-filter: none;
   box-shadow: var(--lg-shadow);
@@ -27,14 +27,14 @@
 .theme-night .grid { position: relative; }
 
 /* the filter */
-.theme-night .grid::before, .np::before, .side-tab::before {
+.theme-night .grid::before, .np::before, .side-tab::before, .vpn-chip::before {
   content: ""; position: absolute; inset: 0; z-index: -2; border-radius: inherit; overflow: hidden; pointer-events: none;
   -webkit-backdrop-filter: blur(0px); backdrop-filter: blur(0px);
   filter: var(--lens, none);
   isolation: isolate;
 }
 /* the overlay and the specular edge */
-.theme-night .grid::after, .np::after, .side-tab::after {
+.theme-night .grid::after, .np::after, .side-tab::after, .vpn-chip::after {
   content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
   padding: 0; -webkit-mask: none; mask: none;
   background: var(--lg-bg-color);
@@ -45,11 +45,11 @@
 /* All three use the calmer settings: blurred so what sits on the glass reads on a calm surface, a
    gentle distortion (#lg-dist-sm) and a lighter wash. (The CodePen's stronger #lg-dist, blur 0 and
    25% wash, is kept in index.html and the variables above if the dock should ever go back to it.) */
-.theme-night .grid::before, .np::before, .side-tab::before {
+.theme-night .grid::before, .np::before, .side-tab::before, .vpn-chip::before {
   -webkit-backdrop-filter: blur(10px) saturate(150%); backdrop-filter: blur(10px) saturate(150%);
   filter: var(--lens, none);   /* edge refraction drawn to each piece's size (lens.js) */
 }
-.theme-night .grid::after, .np::after, .side-tab::after { background: rgba(255, 255, 255, 0.12); }
+.theme-night .grid::after, .np::after, .side-tab::after, .vpn-chip::after { background: rgba(255, 255, 255, 0.12); }
 
 /* the dock: corners concentric with the icons (icon radius 1.625rem + padding 2rem) */
 .theme-night .grid { padding: 2rem 2.25rem; border-radius: 3.625rem; }
@@ -107,3 +107,17 @@ html { overflow: hidden; }
 
 /* closing More apps: the Keep watching row stays out of sight until the dock has shrunk (motion.js) */
 .theme-night.dock-closing .shelf { opacity: 0; transition: none; }
+
+/* the VPN symbol (fork), right of the person tab while a VPN is on: a small round piece of the
+   same glass, the symbol white (dark over a near-white sky, adapt.js) */
+.vpn-chip {
+  position: absolute; top: 0; left: calc(100% + 0.625rem); width: 3.25rem; height: 3.25rem; border-radius: 50%;
+  display: none; align-items: center; justify-content: center; color: rgba(255, 255, 255, 0.92);
+}
+html.vpn-on .vpn-chip { display: flex; }
+html.siding .vpn-chip { visibility: hidden; }
+.vpn-chip svg { width: 1.625rem; height: 1.625rem; }
+.vpn-chip svg path:first-child { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; }
+.vpn-chip svg rect { fill: currentColor; }
+.vpn-chip svg path + rect + path, .vpn-chip svg rect + path { fill: none; stroke: currentColor; stroke-width: 1.6; }
+.vpn-chip.on-light { color: #1d1d1f; }
