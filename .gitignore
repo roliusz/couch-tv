@@ -46,3 +46,7 @@ tmdb.json
 
 # fork: the household's own avatar pictures
 tv-home/web/avatars/
+
+# fork: the household's own scene photos
+tv-home/web/backgrounds/mine/
+scene-photos/

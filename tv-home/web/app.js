@@ -294,7 +294,7 @@
     { id: "water", photo: "scene-water", fg: false, glass: true, water: 0.55 },   // the underside of the surface
     { id: "fog", photo: "scene-fog", fg: true, glass: true },
     { id: "dawn", photo: "scene-dawn", fg: true, glass: true }
-  ];
+  ].concat(window.MY_SCENES || []);   // fork: the household's own (backgrounds/mine/scenes.js)
   var SCENES = SCENE_LIB.slice(), SCENE_MS = 20000;
   var scene = 0, sceneEls = [], glassShown = "";
 
