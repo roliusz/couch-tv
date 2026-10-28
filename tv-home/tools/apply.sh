@@ -101,6 +101,8 @@ TRAKT64=""
 # access for the launcher's listener (WatchLog.kt). Granted here, taken back by undo.sh.
 # (switched off and on again: after a reinstall Android keeps the access but stops running the service)
 "$PY" "$T" shell "cmd notification disallow_listener app.couchtv.launcher/app.couchtv.launcher.NowListener; cmd notification allow_listener app.couchtv.launcher/app.couchtv.launcher.NowListener" || true
+# fork: "display over other apps", for the doorbell card over what is playing
+"$PY" "$T" shell "appops set app.couchtv.launcher SYSTEM_ALERT_WINDOW allow" || true
 # fork: the TMDB API key (tmdb.json, written by you, git ignores it): where a show streams here
 TMDB64=""
 [ -f "$ROOT/tmdb.json" ] && TMDB64=$("$PY" -c 'import base64,json,sys; t=json.load(open(sys.argv[1])); print(base64.b64encode(json.dumps({"api_key":t["api_key"]},separators=(",",":")).encode()).decode())' "$ROOT/tmdb.json")
