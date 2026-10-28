@@ -48,7 +48,7 @@ def band(img, top):
     return img.resize((W, H), Image.LANCZOS)
 
 
-def sky_mask(img, step, far, floor=1.0, spread=6, paint=0.0, thin=0, smooth=0.0):
+def sky_mask(img, step, far, floor=1.0, spread=6, paint=0.0, thin=0, smooth=0.0, treeline=0.0):
     a = np.asarray(img.filter(ImageFilter.GaussianBlur(1.6)), dtype=np.float32)
     sky = np.zeros((H, W), bool)
     # the top row: whatever is close to its typical colour
@@ -83,6 +83,32 @@ def sky_mask(img, step, far, floor=1.0, spread=6, paint=0.0, thin=0, smooth=0.0)
         lab, n = ndimage.label(calm | sky)
         if n:
             sky |= np.isin(lab, list(set(np.unique(lab[0])) - {0})) & calm
+    # fog down to the trees (--treeline): from the horizon floor, each column that is still sky
+    # carries on down through anything without texture (haze, fog) and stops at the first rows
+    # with real texture (treetops), so the trees' own ragged edge is the skyline, not a straight line
+    if treeline:
+        g = a.mean(axis=2)
+        m = ndimage.uniform_filter(g, 9); m2 = ndimage.uniform_filter(g * g, 9)
+        rough = np.sqrt(np.maximum(m2 - m * m, 0)) > treeline
+        # a few textured rows in a row, so a speck in the fog does not stop it
+        rough = ndimage.binary_opening(rough, structure=np.ones((5, 1), bool))
+        start = max(0, int(floor * H) - 2)
+        edge = np.full(W, start)
+        # columns that are sky at the floor, or just above it (the colour test can stop a few rows short)
+        open_col = sky[max(0, start - 40):start + 1].any(axis=0)
+        for x in range(W):
+            if not open_col[x]:
+                continue
+            hit = np.nonzero(rough[start:, x])[0]
+            edge[x] = start + (hit[0] if len(hit) else 0)
+        edge = ndimage.median_filter(edge, size=5)   # treetops, not single-pixel spikes
+        # narrow blocks rising out of the fog are specks of texture in the haze, not trees (crowns
+        # are wider): close them over
+        edge = ndimage.grey_closing(edge, size=25)
+        for x in range(W):
+            if open_col[x]:
+                top_sky = start - 40 + int(np.nonzero(sky[max(0, start - 40):start + 1, x])[0].max()) if start >= 40 else start
+                sky[min(top_sky, start):edge[x], x] = True
     # wires and poles across the sky (--thin): too thin to be scenery, they leave the cut-out
     if thin:
         fg = ~sky
@@ -102,6 +128,24 @@ def sky_mask(img, step, far, floor=1.0, spread=6, paint=0.0, thin=0, smooth=0.0)
     return ~fg
 
 
+def fade(img, sky, floor, rough, hard):
+    """Trees in fog (with --treeline): below the horizon floor, in the columns that were sky there,
+    the trees grow solid as their texture shows through the mist, so the clock's digits melt into
+    the foggy forest instead of meeting a hard edge. Once solid, solid all the way down."""
+    a = np.asarray(img.filter(ImageFilter.GaussianBlur(1.6)), dtype=np.float32).mean(axis=2)
+    m = ndimage.uniform_filter(a, 9); m2 = ndimage.uniform_filter(a * a, 9)
+    tex = np.sqrt(np.maximum(m2 - m * m, 0))
+    lo, hi = rough * 0.5, rough * 1.8
+    soft = ndimage.gaussian_filter(np.clip((tex - lo) / (hi - lo), 0, 1), 5)
+    start = max(1, int(floor * H) - 2)
+    soft[start:] = np.maximum.accumulate(soft[start:], axis=0)
+    open_col = sky[start - 1]
+    out = hard.copy()
+    region = out[start:, open_col]
+    out[start:, open_col] = np.maximum(np.minimum(region, soft[start:, open_col]), 0)
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("photo"); ap.add_argument("id")
@@ -111,6 +155,7 @@ def main():
     ap.add_argument("--floor", type=float, default=1.0, help="the horizon, as a share of the height: nothing below it is sky")
     ap.add_argument("--paint", type=float, default=0.0, help="also sky: anything above the horizon this close to the top's colour")
     ap.add_argument("--smooth", type=float, default=0.0, help="also sky: texture-free areas (fog, cloud) reaching the top; how calm, e.g. 4")
+    ap.add_argument("--treeline", type=float, default=0.0, help="from the horizon floor, carry the sky down through fog to the first texture this rough (trees), e.g. 3.5")
     ap.add_argument("--thin", type=int, default=0, help="drop anything thinner than this many pixels (wires, poles) from the cut-out")
     ap.add_argument("--spread", type=int, default=6, help="how far the sky may spread sideways per row (around wires, posts)")
     ap.add_argument("--bright", type=float, default=1.3, help="how much brighter the clock's frosted fill is than the photo")
@@ -118,7 +163,7 @@ def main():
     o = ap.parse_args()
     os.makedirs(OUT, exist_ok=True)
     img = band(Image.open(o.photo), o.top)
-    sky = sky_mask(img, o.step, o.far, o.floor, o.spread, o.paint, o.thin, o.smooth)
+    sky = sky_mask(img, o.step, o.far, o.floor, o.spread, o.paint, o.thin, o.smooth, o.treeline)
 
     name = os.path.join(OUT, "scene-" + o.id)
     img.save(name + ".jpg", quality=86, optimize=True, progressive=True)
@@ -128,6 +173,8 @@ def main():
     glass.save(name + "-glass.jpg", quality=80, optimize=True)
     # the cut-out: the photo where it is not sky, its edge softened by a pixel
     alpha = Image.fromarray(((~sky) * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.0))
+    if o.treeline:
+        alpha = Image.fromarray((fade(img, sky, o.floor, o.treeline, np.asarray(alpha) / 255.0) * 255).astype(np.uint8))
     fg = img.copy(); fg.putalpha(alpha)
     fg.save(name + "-fg.webp", quality=88, method=6)
     share = 100 * sky.mean()
