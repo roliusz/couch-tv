@@ -92,3 +92,9 @@
    drift stalled while nothing else moved and caught up when the row scrolled, so the background
    seemed to magnify under the cards. */
 .bg img.on { animation: none; transform: none; }
+
+/* The Keep watching row runs on past the right edge. Android's WebView let that widen the layout
+   the fixed scenes are sized against, so the photo (and the clock) grew with the row and shrank as
+   it scrolled. Clipped at the screen's edges, the scenes always fill exactly the screen. */
+html { overflow: hidden; }
+.home { overflow: clip; }
