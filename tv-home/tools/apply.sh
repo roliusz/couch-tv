@@ -46,7 +46,10 @@ fi
 mkdir -p "$HERE/../tvs"
 LIST="$HERE/../tvs/$TV_NAME.disabled"
 WIZARD=com.google.android.tungsten.setupwraith
-WANT="com.google.android.apps.tv.launcherx com.google.android.tvlauncher com.google.android.apps.tv.dreamx ${EXTRA_OFF:-}"
+# fork: ambient mode (the screensaver) stays on unless AMBIENT_OFF=1: switched off, the TV has no
+# screensaver to start and turns the screen off when it is idle instead
+AMBIENT=com.google.android.apps.tv.dreamx
+WANT="com.google.android.apps.tv.launcherx com.google.android.tvlauncher ${AMBIENT_OFF:+$AMBIENT} ${EXTRA_OFF:-}"
 HOME_ACT=app.couchtv.launcher/.MainActivity
 RESOLVE="cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME"
 
@@ -63,10 +66,11 @@ fi
 echo "1/4  Installing the app"
 "$PY" "$T" install "$APK"
 
-echo "2/4  Switching off the Google home and ambient mode"
+echo "2/4  Switching off the Google home${AMBIENT_OFF:+ and ambient mode}"
 present=$("$PY" "$T" shell "pm list packages" | sed 's/package://')
 disabled=$("$PY" "$T" shell "pm list packages -d" | sed 's/package://')
 : > "$LIST"
+[ -z "${AMBIENT_OFF:-}" ] && echo "$disabled" | grep -qx "$AMBIENT" && "$PY" "$T" shell "pm enable $AMBIENT" > /dev/null
 for p in $WANT; do
   if echo "$present" | grep -qx "$p"; then
     "$PY" "$T" shell "pm disable-user --user 0 $p"
