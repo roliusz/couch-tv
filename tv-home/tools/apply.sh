@@ -101,7 +101,10 @@ TRAKT64=""
 # access for the launcher's listener (WatchLog.kt). Granted here, taken back by undo.sh.
 # (switched off and on again: after a reinstall Android keeps the access but stops running the service)
 "$PY" "$T" shell "cmd notification disallow_listener app.couchtv.launcher/app.couchtv.launcher.NowListener; cmd notification allow_listener app.couchtv.launcher/app.couchtv.launcher.NowListener" || true
-"$PY" "$T" shell "am force-stop app.couchtv.launcher; am start -n $HOME_ACT --es bridge ${BRIDGE_URL:-none} --es config_b64 $CFG64 ${HA64:+--es ha_b64 $HA64} ${TRAKT64:+--es trakt_b64 $TRAKT64} ${TV_ID:+--es tv $TV_ID}"
+# fork: the TMDB API key (tmdb.json, written by you, git ignores it): where a show streams here
+TMDB64=""
+[ -f "$ROOT/tmdb.json" ] && TMDB64=$("$PY" -c 'import base64,json,sys; t=json.load(open(sys.argv[1])); print(base64.b64encode(json.dumps({"api_key":t["api_key"]},separators=(",",":")).encode()).decode())' "$ROOT/tmdb.json")
+"$PY" "$T" shell "am force-stop app.couchtv.launcher; am start -n $HOME_ACT --es bridge ${BRIDGE_URL:-none} --es config_b64 $CFG64 ${HA64:+--es ha_b64 $HA64} ${TRAKT64:+--es trakt_b64 $TRAKT64} ${TMDB64:+--es tmdb_b64 $TMDB64} ${TV_ID:+--es tv $TV_ID}"
 
 # Tell the bridge's daily guard what to keep switched off (a Google TV update can switch it back
 # on). Option A has no bridge, so no guard: run this script again after an update.

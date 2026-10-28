@@ -185,6 +185,12 @@ class MainActivity : Activity() {
                 if (JSONObject(json).optString("client_id").isNotEmpty()) e.putString("trakt", json)
             } catch (x: Exception) {}
         }
+        i.getStringExtra("tmdb_b64")?.let {
+            try {
+                val json = String(android.util.Base64.decode(it, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                if (JSONObject(json).optString("api_key").isNotEmpty()) e.putString("tmdb", json)
+            } catch (x: Exception) {}
+        }
         e.apply()
     }
 

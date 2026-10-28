@@ -103,7 +103,7 @@ object Trakt {
     fun unlink(ctx: Context, who: String) {
         val w = safe(who) ?: return
         prefs(ctx).edit().remove("trakt.tok.$w").apply()
-        File(ctx.filesDir, "upnext7-$w.json").delete()
+        File(ctx.filesDir, "upnext8-$w.json").delete()
         main.post { onChange?.invoke(w) }
     }
 
@@ -136,7 +136,7 @@ object Trakt {
     /** The person's next episodes as last fetched; fetches again in the background when stale. */
     fun upNext(ctx: Context, who: String): String {
         val w = safe(who) ?: return "[]"
-        val f = File(ctx.filesDir, "upnext7-$w.json")
+        val f = File(ctx.filesDir, "upnext8-$w.json")
         val stale = !f.exists() || System.currentTimeMillis() - f.lastModified() > FRESH_MS
         if (stale && token(ctx, w) != null && busy.add(w)) io.execute {
             try { fetch(ctx, w)?.let { f.writeText(it.toString()); main.post { onChange?.invoke(w) } } }
@@ -229,6 +229,40 @@ object Trakt {
         return JSONObject().put("season", sn).put("number", en)
     }
 
+    /** Where the show streams in the household's country, from TMDB (JustWatch's data): the
+     *  services by name, subscription first (Netflix for The Office in NL, Apple TV for Small
+     *  Prophets), so the card shows the app it is really watched in, not the network it first
+     *  aired on. Needs a TMDB key (tmdb.json, apply.sh); without one, or not on TMDB, nothing. */
+    private val showStreams = HashMap<Long, JSONArray>()
+    private fun streamsHere(ctx: Context, tmdb: Long): JSONArray {
+        if (tmdb <= 0) return JSONArray()
+        showStreams[tmdb]?.let { return it }
+        val key = try { JSONObject(prefs(ctx).getString("tmdb", "{}")!!).optString("api_key") } catch (e: Exception) { "" }
+        val cc = try { JSONObject(prefs(ctx).getString("config", "{}")!!).optString("country") } catch (e: Exception) { "" }.uppercase()
+        if (key.isEmpty() || !Regex("[A-Z]{2}").matches(cc)) return JSONArray()
+        val out = JSONArray()
+        // a v4 read access token (a long JWT) goes in the header, a v3 key in the address
+        val bearer = key.length > 60
+        val c = URL("https://api.themoviedb.org/3/tv/$tmdb/watch/providers" + (if (bearer) "" else "?api_key=$key"))
+            .openConnection() as HttpURLConnection
+        try {
+            c.connectTimeout = 6000; c.readTimeout = 12000
+            if (bearer) c.setRequestProperty("Authorization", "Bearer $key")
+            c.setRequestProperty("Accept", "application/json")
+            if (c.responseCode == 200) {
+                val here = JSONObject(c.inputStream.bufferedReader().use { it.readText() }).optJSONObject("results")?.optJSONObject(cc)
+                val seen = HashSet<String>()
+                for (kind in listOf("flatrate", "free", "ads", "rent", "buy")) {
+                    val a = here?.optJSONArray(kind) ?: continue
+                    for (i in 0 until a.length()) a.getJSONObject(i).optString("provider_name").takeIf { it.isNotEmpty() && seen.add(it) }?.let { out.put(it) }
+                }
+                showStreams[tmdb] = out
+            }
+        } catch (e: Exception) {
+        } finally { c.disconnect() }
+        return out
+    }
+
     private fun fetch(ctx: Context, who: String): JSONArray? {
         val tok = access(ctx, who) ?: return null
         val (c, s) = call(ctx, "GET", "/sync/watched/shows?extended=full,images", bearer = tok)
@@ -260,6 +294,7 @@ object Trakt {
                 .put("episode_title", next.optString("title").takeIf { it.isNotEmpty() && it != "null" } ?: JSONObject.NULL)
                 .put("network", show.optString("network"))
                 .put("watch", whereToWatch(ctx, id, tok))
+                .put("streams", streamsHere(ctx, show.getJSONObject("ids").optLong("tmdb")))
                 .put("art", art(ctx, id, show) ?: picture(next) ?: JSONObject.NULL)
                 .put("last_played", r.optString("last_watched_at")))
         }

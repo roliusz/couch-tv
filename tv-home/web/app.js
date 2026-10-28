@@ -2390,8 +2390,9 @@
   }
   // ---- fork: Trakt's next episode. For each show Trakt says comes next, the card reads "Next ·
   // S2, E4"; a show the TV recorded more recently than Trakt last heard of it keeps the TV's card
-  // (it may still be mid-episode). The app comes from what the TV saw, else the show's network,
-  // else where Trakt says it streams here (a broadcaster such as BBC Two has no app on the TV).
+  // (it may still be mid-episode). The app comes from what the TV saw, else where TMDB says the
+  // show streams in this country (Trakt.kt; Netflix for The Office in NL, not NBC), else the
+  // show's network, else Trakt's own "Watch now".
   var NETWORK_APPS = [[/netflix/i, ["com.netflix.ninja"]], [/hbo|\bmax\b/i, ["com.wbd.stream"]],
     [/apple/i, ["com.apple.atve.sony.appletv", "com.apple.atve.androidtv.appletv"]], [/disney/i, ["com.disney.disneyplus"]],
     [/prime|amazon/i, ["com.amazon.amazonvideo.livingroom"]], [/youtube/i, ["com.google.android.youtube.tv"]],
@@ -2412,7 +2413,8 @@
     else if (MOCK && traktMock.linked[pid]) list = MOCK_TRAKT;
     return list.map(function (e) {
       return { id: e.id, title: e.title, season: e.season, episode: e.episode, episode_title: e.episode_title || null,
-        app: appForNetwork(e.network) || (e.watch || []).map(appForNetwork).filter(Boolean)[0] || null, backdrop: e.art || null, progress: null, next: true, source: "tv",
+        app: (e.streams || []).map(appForNetwork).filter(Boolean)[0] || appForNetwork(e.network) ||
+          (e.watch || []).map(appForNetwork).filter(Boolean)[0] || null, backdrop: e.art || null, progress: null, next: true, source: "tv",
         last_played: Date.parse(e.last_played) || 0 };
     });
   }
