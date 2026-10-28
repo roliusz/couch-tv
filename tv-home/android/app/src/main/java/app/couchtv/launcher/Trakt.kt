@@ -103,7 +103,7 @@ object Trakt {
     fun unlink(ctx: Context, who: String) {
         val w = safe(who) ?: return
         prefs(ctx).edit().remove("trakt.tok.$w").apply()
-        File(ctx.filesDir, "upnext5-$w.json").delete()
+        File(ctx.filesDir, "upnext7-$w.json").delete()
         main.post { onChange?.invoke(w) }
     }
 
@@ -136,7 +136,7 @@ object Trakt {
     /** The person's next episodes as last fetched; fetches again in the background when stale. */
     fun upNext(ctx: Context, who: String): String {
         val w = safe(who) ?: return "[]"
-        val f = File(ctx.filesDir, "upnext5-$w.json")
+        val f = File(ctx.filesDir, "upnext7-$w.json")
         val stale = !f.exists() || System.currentTimeMillis() - f.lastModified() > FRESH_MS
         if (stale && token(ctx, w) != null && busy.add(w)) io.execute {
             try { fetch(ctx, w)?.let { f.writeText(it.toString()); main.post { onChange?.invoke(w) } } }
@@ -197,6 +197,38 @@ object Trakt {
         return out
     }
 
+    /** The episode after the one watched last, as Netflix and Apple TV pick it. Trakt's own
+     *  next_episode is the first never watched: nothing for a show being watched again (The Office
+     *  all seen years ago, now on season 5 once more), and an old gap far behind where someone
+     *  really is when they skipped an episode once. The last one watched was the finale: nothing. */
+    private fun after(pr: JSONObject): JSONObject? {
+        // the episode watched most recently, by when (each episode carries its last_watched_at),
+        // else Trakt's last_episode
+        val order = ArrayList<Pair<Int, Int>>()
+        var newest = ""; var latest: Pair<Int, Int>? = null
+        pr.optJSONArray("seasons")?.let { ss ->
+            for (i in 0 until ss.length()) {
+                val se = ss.getJSONObject(i); val n = se.optInt("number")
+                if (n == 0) continue
+                val eps = se.optJSONArray("episodes") ?: continue
+                for (j in 0 until eps.length()) {
+                    val ep = eps.getJSONObject(j); val k = n to ep.optInt("number")
+                    order.add(k)
+                    val w = ep.optString("last_watched_at").takeIf { it.isNotEmpty() && it != "null" } ?: continue
+                    if (w > newest) { newest = w; latest = k }
+                }
+            }
+        }
+        val last = latest ?: pr.optJSONObject("last_episode")?.let { it.optInt("season") to it.optInt("number") }
+            ?: return pr.optJSONObject("next_episode")
+        val at = order.indexOf(last)
+        if (at < 0) return pr.optJSONObject("next_episode")
+        if (at + 1 >= order.size) return null
+        val (sn, en) = order[at + 1]
+        pr.optJSONObject("next_episode")?.let { if (it.optInt("season") == sn && it.optInt("number") == en) return it }
+        return JSONObject().put("season", sn).put("number", en)
+    }
+
     private fun fetch(ctx: Context, who: String): JSONArray? {
         val tok = access(ctx, who) ?: return null
         val (c, s) = call(ctx, "GET", "/sync/watched/shows?extended=full,images", bearer = tok)
@@ -221,7 +253,7 @@ object Trakt {
             val id = show.getJSONObject("ids").getLong("trakt")
             val (pc, ps) = call(ctx, "GET", "/shows/$id/progress/watched?hidden=false&specials=false&extended=images", bearer = tok)
             if (pc != 200) continue
-            val next = JSONObject(ps).optJSONObject("next_episode") ?: continue
+            val next = after(JSONObject(ps)) ?: continue
             out.put(JSONObject()
                 .put("id", "t$id").put("title", show.optString("title"))
                 .put("season", next.optInt("season")).put("episode", next.optInt("number"))

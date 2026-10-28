@@ -595,9 +595,13 @@
   }
   // fork: a person's own picture (web/avatars/<id>.png, git ignores the folder) over their letter;
   // without one the picture removes itself and the letter shows
+  // (once a picture has loaded it is remembered, so a redraw, as the sidebar does on every move,
+  // shows it straight away instead of the letter's disc until it loads again)
+  var FACES = window.tvFaces = {};
   function avatarHTML(p) {
-    return '<span class="avatar" style="background:' + esc(colourOf(p)) + '">' + esc((p.name || "?").trim().charAt(0).toUpperCase()) +
-      (p.id ? '<img class="aface" src="avatars/' + esc(p.id) + '.png" alt="" onload="this.parentNode.classList.add(\'has-face\')" onerror="this.remove()">' : "") + "</span>";
+    var face = p.id && FACES[p.id];
+    return '<span class="avatar' + (face ? " has-face" : "") + '" style="background:' + esc(colourOf(p)) + '">' + esc((p.name || "?").trim().charAt(0).toUpperCase()) +
+      (p.id ? '<img class="aface" src="avatars/' + esc(p.id) + '.png" alt="" onload="tvFaces[\'' + esc(p.id) + '\']=1;this.parentNode.classList.add(\'has-face\')" onerror="this.remove()">' : "") + "</span>";
   }
   function whoIndex() { return Math.max(0, PEOPLE.map(function (p) { return p.id; }).indexOf(who)); }
 
@@ -2425,7 +2429,8 @@
       n.app = tv.app || n.app; n.backdrop = n.backdrop || tv.backdrop;
       out[i] = n;
     });
-    return out.sort(function (a, b) { return when(b) - when(a); });
+    // Trakt's shows first, then what the TV recorded itself (YouTube TV); newest first in each
+    return out.sort(function (a, b) { return (b.next ? 1 : 0) - (a.next ? 1 : 0) || when(b) - when(a); });
   }
 
   function refresh() {
