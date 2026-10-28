@@ -166,6 +166,36 @@ object Trakt {
         return u
     }
 
+    /** Where the show streams in the household's country (Trakt's "Watch now", for VIP accounts):
+     *  the service names, so the page can pick an app on this TV when the show's own network (often
+     *  a broadcaster, such as BBC Two) has none. Read loosely: every "source" or "name" found under
+     *  the country's subscription and free lists. Nothing (no VIP, not offered) leaves it empty. */
+    private val showWhere = HashMap<Long, JSONArray>()
+    private fun whereToWatch(ctx: Context, id: Long, bearer: String): JSONArray {
+        showWhere[id]?.let { return it }
+        val cc = try { JSONObject(prefs(ctx).getString("config", "{}")!!).optString("country") } catch (e: Exception) { "" }
+            .lowercase().takeIf { Regex("[a-z]{2}").matches(it) } ?: return JSONArray()
+        val (c, s) = call(ctx, "GET", "/shows/$id/watchnow/$cc", bearer = bearer)
+        val out = JSONArray()
+        if (c == 200) try {
+            val names = LinkedHashSet<String>()
+            fun walk(v: Any?, keep: Boolean) {
+                when (v) {
+                    is JSONObject -> v.keys().forEach { k ->
+                        val inList = keep || k in setOf("subscription", "subscriptions", "free", "ads", "flatrate")
+                        if (inList && (k == "source" || k == "name")) v.optString(k).takeIf { it.isNotEmpty() }?.let { names.add(it) }
+                        else walk(v.opt(k), inList)
+                    }
+                    is JSONArray -> for (i in 0 until v.length()) walk(v.opt(i), keep)
+                }
+            }
+            walk(JSONObject(s), false)
+            names.forEach { out.put(it) }
+        } catch (e: Exception) {}
+        if (c == 200 || c == 403 || c == 404) showWhere[id] = out
+        return out
+    }
+
     private fun fetch(ctx: Context, who: String): JSONArray? {
         val tok = access(ctx, who) ?: return null
         val (c, s) = call(ctx, "GET", "/sync/watched/shows?extended=full,images", bearer = tok)
@@ -194,6 +224,7 @@ object Trakt {
                 .put("season", next.optInt("season")).put("episode", next.optInt("number"))
                 .put("episode_title", next.optString("title").takeIf { it.isNotEmpty() && it != "null" } ?: JSONObject.NULL)
                 .put("network", show.optString("network"))
+                .put("watch", whereToWatch(ctx, id, tok))
                 .put("art", art(ctx, id, show) ?: picture(next) ?: JSONObject.NULL)
                 .put("last_played", r.optString("last_watched_at")))
         }

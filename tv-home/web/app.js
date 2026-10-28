@@ -1039,10 +1039,10 @@
     paintFocus();
   }
 
-  // Start on the people switch, so the first press picks who is watching.
+  // fork: start on the first app in the dock (not the first Keep watching card)
   function startFocus() {
     s = 0; g = 0;
-    zone = shelfEls.length ? "shelf" : "grid";
+    zone = "grid";
   }
 
   function goHome(back) {
@@ -1055,7 +1055,7 @@
     if (zone === "pmenu") { if (plift) dropPeople(); else closePop(); paintFocus(); return; }
     if (zone === "menu") { closeMenu(); paintFocus(); return; }   // BACK just closes the sleep choices
     if (expanded) { expanded = false; renderGrid(); startFocus(); paintFocus(); return; }
-    var atStart = zone === (shelfEls.length ? "shelf" : "grid") && s === 0 && g === 0;
+    var atStart = zone === "grid" && s === 0 && g === 0;
     if (back === true && atStart) { openSide(); return; }   // tvOS: Back from the content goes to the sidebar
     startFocus();
     paintFocus();
@@ -1358,9 +1358,9 @@
     if (zone !== "side") return;
     document.documentElement.classList.remove("siding");
     $("side").setAttribute("aria-hidden", "true");
-    var f = SIDE.from || { zone: shelfEls.length ? "shelf" : "grid", s: 0, g: 0 };
+    var f = SIDE.from || { zone: "grid", s: 0, g: 0 };
     zone = f.zone; s = f.s; g = f.g;
-    if (zone === "side" || zone === "settings") zone = shelfEls.length ? "shelf" : "grid";
+    if (zone === "side" || zone === "settings") zone = "grid";
     paintFocus();
   }
   // The person tab top left takes focus too: up from the top row reaches it, OK opens the sidebar
@@ -1368,7 +1368,7 @@
   var tabFrom = null;
   function toTab() { tabFrom = { zone: zone, s: s, g: g }; zone = "tab"; paintFocus(); }
   function fromTab() {
-    var f = tabFrom || { zone: shelfEls.length ? "shelf" : "grid", s: 0, g: 0 };
+    var f = tabFrom || { zone: "grid", s: 0, g: 0 };
     zone = f.zone; s = f.s; g = f.g;
     paintFocus();
   }
@@ -1505,7 +1505,7 @@
     paintFocus();
   }
   function fromNp() {
-    var f = npFrom || { zone: shelfEls.length ? "shelf" : "grid", s: 0, g: 0 };
+    var f = npFrom || { zone: "grid", s: 0, g: 0 };
     zone = f.zone === "tab" ? "tab" : f.zone; s = f.s; g = f.g;
     paintFocus();
   }
@@ -2379,7 +2379,8 @@
   }
   // ---- fork: Trakt's next episode. For each show Trakt says comes next, the card reads "Next ·
   // S2, E4"; a show the TV recorded more recently than Trakt last heard of it keeps the TV's card
-  // (it may still be mid-episode). The app comes from what the TV saw, else the show's network.
+  // (it may still be mid-episode). The app comes from what the TV saw, else the show's network,
+  // else where Trakt says it streams here (a broadcaster such as BBC Two has no app on the TV).
   var NETWORK_APPS = [[/netflix/i, ["com.netflix.ninja"]], [/hbo|\bmax\b/i, ["com.wbd.stream"]],
     [/apple/i, ["com.apple.atve.sony.appletv", "com.apple.atve.androidtv.appletv"]], [/disney/i, ["com.disney.disneyplus"]],
     [/prime|amazon/i, ["com.amazon.amazonvideo.livingroom"]], [/youtube/i, ["com.google.android.youtube.tv"]],
@@ -2400,7 +2401,7 @@
     else if (MOCK && traktMock.linked[pid]) list = MOCK_TRAKT;
     return list.map(function (e) {
       return { id: e.id, title: e.title, season: e.season, episode: e.episode, episode_title: e.episode_title || null,
-        app: appForNetwork(e.network), backdrop: e.art || null, progress: null, next: true, source: "tv",
+        app: appForNetwork(e.network) || (e.watch || []).map(appForNetwork).filter(Boolean)[0] || null, backdrop: e.art || null, progress: null, next: true, source: "tv",
         last_played: Date.parse(e.last_played) || 0 };
     });
   }

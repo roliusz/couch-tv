@@ -63,17 +63,24 @@
       f.setAttribute("filterUnits", "userSpaceOnUse");
       f.setAttribute("primitiveUnits", "userSpaceOnUse");
       f.setAttribute("color-interpolation-filters", "sRGB");
-      f.innerHTML = '<feImage result="map" preserveAspectRatio="none"/>' +
+      // a neutral grey (no bend) under the map, so wherever the map does not reach the glass
+      // still shows, unbent
+      f.innerHTML = '<feFlood flood-color="#808000" result="still"/>' +
+        '<feImage result="rim" preserveAspectRatio="none"/>' +
+        '<feMerge result="map"><feMergeNode in="still"/><feMergeNode in="rim"/></feMerge>' +
         '<feDisplacementMap in="SourceGraphic" in2="map" xChannelSelector="R" yChannelSelector="G"/>';
       host.appendChild(f);
     }
-    ["x", "y"].forEach(function (a) { f.setAttribute(a, "0"); });
-    f.setAttribute("width", w); f.setAttribute("height", h);
-    var im = f.firstChild;
+    // The filter's area reaches far past the piece: while the dock grows (More apps) the map is
+    // the old size until the change settles, and an area that tight cut the new part of the glass
+    // away (it went clear, then came back).
+    f.setAttribute("x", "-2000"); f.setAttribute("y", "-2000");
+    f.setAttribute("width", w + 4000); f.setAttribute("height", h + 4000);
+    var im = f.querySelector("feImage");
     im.setAttribute("x", "0"); im.setAttribute("y", "0");
     im.setAttribute("width", w); im.setAttribute("height", h);
     im.setAttribute("href", mapFor(w, h, r));
-    f.lastChild.setAttribute("scale", STRENGTH * 2);
+    f.querySelector("feDisplacementMap").setAttribute("scale", STRENGTH * 2);
     el.style.setProperty("--lens", "url(#" + p.id + ")");
   }
 
