@@ -136,7 +136,6 @@ def sky_mask(img, step, far, floor=1.0, spread=6, paint=0.0, thin=0, smooth=0.0,
         edges = set(np.unique(lab[-1])) | set(np.unique(lab[:, 0])) | set(np.unique(lab[:, -1]))
         fg = np.isin(lab, list(edges - {0}))
     # one pixel in from the edge: the skyline's last pixels are half sky and showed as a halo
-    fg = ndimage.binary_erosion(fg, iterations=1, border_value=1)
     return ~fg
 
 
@@ -158,6 +157,25 @@ def fade(img, sky, floor, rough, hard):
     return out
 
 
+def refine(img, sky, band=10):
+    """The exact edge (alpha matting): the rough sky mask, shrunk away from its edge on both sides,
+    says what is surely sky and surely scenery; in the band between, every pixel's share of scenery
+    is worked out from the photo's own colours, so sharp ridges, needle peaks, building corners and
+    single trees keep their real outline instead of a smoothed one."""
+    from pymatting import estimate_alpha_cf
+    fg = ~sky
+    sure_fg = ndimage.binary_erosion(fg, iterations=band, border_value=1)
+    sure_sky = ndimage.binary_erosion(sky, iterations=band, border_value=1)
+    tri = np.full(sky.shape, 0.5)
+    tri[sure_fg] = 1.0; tri[sure_sky] = 0.0
+    rgb = np.asarray(img, dtype=np.float64) / 255.0
+    a = estimate_alpha_cf(rgb, tri)
+    a = np.clip(a, 0, 1)
+    # tidy the matte: near-certain values snap, so no faint haze of sky is drawn over the clock
+    a[a < 0.15] = 0; a[a > 0.8] = 1
+    return a
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("photo"); ap.add_argument("id")
@@ -171,6 +189,8 @@ def main():
     ap.add_argument("--thin", type=int, default=0, help="drop anything thinner than this many pixels (wires, poles) from the cut-out")
     ap.add_argument("--spread", type=int, default=6, help="how far the sky may spread sideways per row (around wires, posts)")
     ap.add_argument("--bright", type=float, default=1.3, help="how much brighter the clock's frosted fill is than the photo")
+    ap.add_argument("--band", type=int, default=10, help="how far either side of the rough edge the exact edge is looked for, in pixels")
+    ap.add_argument("--no-refine", action="store_true", help="skip the exact-edge step (faster, softer edge)")
     ap.add_argument("--preview")
     ap.add_argument("--fill", type=int, default=0, help="fill slivers of sky this narrow that cut down into the scenery, e.g. 40")
     o = ap.parse_args()
@@ -186,10 +206,21 @@ def main():
     glass = ImageEnhance.Brightness(ImageEnhance.Color(glass).enhance(1.05)).enhance(o.bright)
     glass.save(name + "-glass.jpg", quality=80, optimize=True)
     # the cut-out: the photo where it is not sky, its edge softened by a pixel
-    alpha = Image.fromarray(((~sky) * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.0))
+    if o.no_refine:
+        a = np.asarray(Image.fromarray(((~sky) * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.0))) / 255.0
+    else:
+        a = refine(img, sky, o.band)
     if o.treeline:
-        alpha = Image.fromarray((fade(img, sky, o.floor, o.treeline, np.asarray(alpha) / 255.0) * 255).astype(np.uint8))
-    fg = img.copy(); fg.putalpha(alpha)
+        a = fade(img, sky, o.floor, o.treeline, a)
+    alpha = Image.fromarray((a * 255).astype(np.uint8))
+    if not o.no_refine:
+        # the edge's own colours, without the sky mixed in, so no sky-coloured fringe is drawn
+        from pymatting import estimate_foreground_ml
+        f = estimate_foreground_ml(np.asarray(img, dtype=np.float64) / 255.0, a)
+        img_fg = Image.fromarray((np.clip(f, 0, 1) * 255).astype(np.uint8))
+    else:
+        img_fg = img
+    fg = img_fg.copy(); fg.putalpha(alpha)
     fg.save(name + "-fg.webp", quality=88, method=6)
     share = 100 * sky.mean()
     print(f"{o.id}: sky {share:.0f}% of the picture; skyline from y={np.argmin(sky.mean(axis=1) > 0.5)} px")
@@ -197,6 +228,7 @@ def main():
         os.makedirs(o.preview, exist_ok=True)
         check = Image.new("RGB", (W, H), (255, 0, 200)); check.paste(fg, (0, 0), fg)
         check.resize((960, 540)).save(os.path.join(o.preview, o.id + "-check.jpg"), quality=85)
+        check.save(os.path.join(o.preview, o.id + "-full.png"))
 
 
 if __name__ == "__main__":

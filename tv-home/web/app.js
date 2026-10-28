@@ -396,7 +396,7 @@
     if (prev !== i) sceneEls[prev].classList.remove("on");
     // after the fade, stop drawing the old one and get the next one ready
     setTimeout(function () {
-      var next = (scene + 1) % SCENES.length;
+      var next = upcoming();
       // the others let go of their pictures too (only hidden, they stayed decoded in memory)
       sceneEls.forEach(function (el, k) { if (k !== scene && k !== next && el.classList.contains("ready")) unreadyScene(el); });
       readyScene(next);
@@ -424,7 +424,22 @@
   }
 
   // the settings screen covers the scenes, so they wait (one less thing for a small TV stick to draw)
-  function nextScene() { if (zone !== "settings") showScene((scene + 1) % SCENES.length); }
+  // fork: the scenes come in a shuffled order: each once before any comes again, never the same
+  // one twice in a row (a new shuffle each round)
+  var sceneBag = [];
+  function upcoming() {
+    if (SCENES.length < 2) return 0;
+    if (!sceneBag.length) {
+      sceneBag = SCENES.map(function (x, i) { return i; }).filter(function (i) { return i !== scene; });
+      for (var i = sceneBag.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = sceneBag[i]; sceneBag[i] = sceneBag[j]; sceneBag[j] = t; }
+    }
+    return sceneBag[0];
+  }
+  function nextScene() {
+    if (zone === "settings" || SCENES.length < 2) return;
+    upcoming();
+    showScene(sceneBag.shift());
+  }
 
   // The bridge's reading for the place in config.json, or straight from Open-Meteo with no bridge
   // or when Home settings chose another place. Hidden when Home settings switched the weather off.
@@ -1955,8 +1970,8 @@
     if (!SCENES.length) SCENES = [SCENE_LIB[0]];
     $("scenes").innerHTML = "";
     buildScenes();
-    scene = 0;
-    showScene(0);
+    scene = 0; sceneBag = [];
+    showScene(Math.floor(Math.random() * SCENES.length));
     clearInterval(sceneTimer);
     if (SCENES.length > 1) sceneTimer = setInterval(nextScene, SCENE_MS);
   }
@@ -2711,7 +2726,8 @@
       buildScenes();
       // ?scene=fog starts on that scene, for previews (?scene=own: the first of the household's photos)
       var first = (Q.match(/[?&]scene=([a-z]+)/) || [])[1];
-      showScene(Math.max(0, SCENES.map(function (s) { return s.own ? "own" : s.id; }).indexOf(first)));
+      var at = SCENES.map(function (s) { return s.own ? "own" : s.id; }).indexOf(first);
+      showScene(at >= 0 ? at : Math.floor(Math.random() * SCENES.length));
       if (SCENES.length > 1) sceneTimer = setInterval(nextScene, SCENE_MS);
       // the clock font must be in before the glass is measured
       if (document.fonts) document.fonts.load("300 10px Antonio").then(function () { glassShown = ""; clock(); });
