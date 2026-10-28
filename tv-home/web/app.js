@@ -666,7 +666,10 @@
 
   function renderShelf() {
     var track = $("shelf");
-    data.shows = data.showsBy[who] || [];
+    data.shows = (data.showsBy[who] || []).map(function (it) {
+      var a = pickedApp(it);
+      return a ? Object.assign({}, it, { app: a }) : it;
+    });
     var anyone = PEOPLE.some(function (p) { return (data.showsBy[p.id] || []).length; });
     // nobody has anything on the go: no empty box, the photo has the space
     $("shelf-section").classList.toggle("empty", !anyone);
@@ -1099,6 +1102,7 @@
       return true;
     }
     if (zone === "grid") return holdApp();
+    if (zone === "shelf") return holdShow();
     return false;
   }
 
@@ -1310,6 +1314,17 @@
       if (m) rows.push({ note: t("off_in", { m: m }) });
       return rows;
     }
+    if (SIDE.level === "app" && SIDE.show) {
+      var cur = showPicks()[SIDE.show.key];
+      rows.push({ title: t("show_app", { title: SIDE.show.title }) });
+      rows.push({ kind: "app-auto", icon: ICONS.check, label: t("show_app_auto"), check: !cur });
+      pickApps().forEach(function (a) {
+        var u = iconUrl(a.package);
+        rows.push({ kind: "app-pick", pkg: a.package, label: a.name, check: a.package === cur,
+          avatar: u ? '<img class="sapp" src="' + esc(u) + '" alt="">' : "" });
+      });
+      return rows;
+    }
     if (SIDE.level === "who") {
       rows.push({ title: t("who_watching") });
       PEOPLE.forEach(function (p) { rows.push({ kind: "pick", id: p.id, label: p.name, avatar: avatarHTML(p), check: p.id === who }); });
@@ -1363,6 +1378,35 @@
     el.innerHTML = peopleCount() >= 2 ? avatarHTML(PEOPLE[whoIndex()]) + "<b>" + esc(PEOPLE[whoIndex()].name) + "</b>"
       : '<i class="sic">' + SIDE_MENU + "</i>";
   }
+  // ---- fork: which app a show is watched in, picked by the household. Hold OK on a Keep watching
+  // card: the sidebar lists the dock's apps; the pick is kept per show on this TV and wins over
+  // what the show's network or TMDB suggest. "Automatic" forgets it.
+  function showKey(it) { return String(it.title || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); }
+  function showPicks() { return kept("tvhome.showapp") || {}; }
+  function pickedApp(it) {
+    var pkg = showPicks()[showKey(it)];
+    var a = pkg && (data.apps || []).filter(function (x) { return x.package === pkg; })[0];
+    return a ? { package: a.package, name: a.name } : null;
+  }
+  function holdShow() {
+    var it = data.shows[s];
+    if (!it) return false;
+    SIDE.show = { key: showKey(it), title: it.title };
+    openSide();
+    var apps = pickApps(), cur = showPicks()[SIDE.show.key];
+    sideLevel("app", cur ? 1 + Math.max(0, apps.map(function (a) { return a.package; }).indexOf(cur)) : 0);
+    return true;
+  }
+  function pickApps() {   // the dock's apps, in the dock's order
+    return gridItems.filter(function (a) { return a.package && a.kind !== "more" && a.kind !== "gear" && !a.store; });
+  }
+  function setShowApp(pkg) {
+    var picks = showPicks();
+    if (pkg) picks[SIDE.show.key] = pkg; else delete picks[SIDE.show.key];
+    keep("tvhome.showapp", picks);
+    renderShelf();
+  }
+
   function openSide() {
     if (zone === "side") return;
     SIDE.from = { zone: zone, s: s, g: g };
@@ -1412,6 +1456,7 @@
     renderSide();
   }
   function sideBack() {
+    if (SIDE.level === "app") { closeSide(); return; }   // it was opened from a card: back to it
     if (SIDE.level === "sleep") {   // back onto the Sleep timer row
       SIDE.level = "main";
       sideLevel("main", Math.max(0, sideRows().map(function (r) { return r.kind; }).indexOf("sleep-open")));
@@ -1440,6 +1485,7 @@
     if (r.kind === "input") { closeSide(); openInputs(); return; }
     if (r.kind === "store") { closeSide(); openStore(); return; }
     if (r.kind === "ha") { haRun(r.id); return; }   // the sidebar stays open: run another, or go
+    if (r.kind === "app-pick" || r.kind === "app-auto") { setShowApp(r.kind === "app-pick" ? r.pkg : null); closeSide(); return; }
     if (r.kind === "home-settings") { closeSide(); openSettings(); return; }
     if (r.kind === "tv-settings") { closeSide(); openTvSettings(); return; }
   }
