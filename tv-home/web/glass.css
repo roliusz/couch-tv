@@ -98,3 +98,9 @@
    it scrolled. Clipped at the screen's edges, the scenes always fill exactly the screen. */
 html { overflow: hidden; }
 .home { overflow: clip; }
+
+/* a person's own picture fills their round avatar (app.js, web/avatars/<id>.png); a memoji sits on
+   a soft light disc rather than the person's colour */
+.avatar { position: relative; overflow: hidden; }
+.avatar .aface { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.avatar.has-face { background: rgba(255, 255, 255, 0.85) !important; color: transparent; }

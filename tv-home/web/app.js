@@ -593,8 +593,11 @@
     for (var h = 0, i = 0; i < p.id.length; i++) h = (h * 31 + p.id.charCodeAt(i)) >>> 0;
     return PALETTE[h % PALETTE.length];
   }
+  // fork: a person's own picture (web/avatars/<id>.png, git ignores the folder) over their letter;
+  // without one the picture removes itself and the letter shows
   function avatarHTML(p) {
-    return '<span class="avatar" style="background:' + esc(colourOf(p)) + '">' + esc((p.name || "?").trim().charAt(0).toUpperCase()) + "</span>";
+    return '<span class="avatar" style="background:' + esc(colourOf(p)) + '">' + esc((p.name || "?").trim().charAt(0).toUpperCase()) +
+      (p.id ? '<img class="aface" src="avatars/' + esc(p.id) + '.png" alt="" onload="this.parentNode.classList.add(\'has-face\')" onerror="this.remove()">' : "") + "</span>";
   }
   function whoIndex() { return Math.max(0, PEOPLE.map(function (p) { return p.id; }).indexOf(who)); }
 
