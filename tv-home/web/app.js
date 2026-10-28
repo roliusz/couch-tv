@@ -2424,12 +2424,26 @@
   function goIdle() {
     if (!/^(grid|shelf|tab|np)$/.test(zone) || expanded || lift) { idleSoon(); return; }
     topShelfOff();
-    document.documentElement.classList.add("idle");
+    var root = document.documentElement;
+    root.classList.add("idle");
+    // the music card, once it has slid off the top, comes back along the bottom, the dock's
+    // width, in one row (idle.css): it rises into the place the dock and Keep watching left
+    setTimeout(function () {
+      if (!isIdle()) return;
+      root.classList.add("np-wide", "np-below");
+      requestAnimationFrame(function () { requestAnimationFrame(function () { root.classList.remove("np-below"); }); });
+    }, 950);
   }
   function idleSoon() { clearTimeout(idleTimer); idleTimer = setTimeout(goIdle, Math.max(1, parseFloat(HOME.idle_minutes) || 3) * 60000); }
   function wake() {
     if (!isIdle()) { idleSoon(); return false; }
-    document.documentElement.classList.remove("idle");
+    var root = document.documentElement;
+    if (root.classList.contains("np-wide")) {   // back to its corner, sliding in from the top
+      root.classList.remove("np-wide", "np-below");
+      root.classList.add("np-up");
+      requestAnimationFrame(function () { requestAnimationFrame(function () { root.classList.remove("np-up"); }); });
+    }
+    root.classList.remove("idle");
     idleSoon();
   try { if (TV && TV.vpn) document.documentElement.classList.toggle("vpn-on", !!TV.vpn()); } catch (e) {}
     paintFocus();
