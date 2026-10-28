@@ -99,8 +99,11 @@
 html { overflow: hidden; }
 .home { overflow: clip; }
 
-/* a person's own picture fills their round avatar (app.js, web/avatars/<id>.png); a memoji sits on
-   a soft light disc rather than the person's colour */
-.avatar { position: relative; overflow: hidden; }
-.avatar .aface { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.avatar.has-face { background: rgba(255, 255, 255, 0.85) !important; color: transparent; }
+/* a person's own picture in place of their letter (app.js, web/avatars/<id>.png): just the picture,
+   no disc or ring behind it */
+.avatar { position: relative; }
+.avatar .aface { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.avatar.has-face { background: none !important; box-shadow: none; color: transparent; text-shadow: none; }
+
+/* closing More apps: the Keep watching row stays out of sight until the dock has shrunk (motion.js) */
+.theme-night.dock-closing .shelf { opacity: 0; transition: none; }

@@ -1231,25 +1231,42 @@
 
   // Trakt (fork): each person links their own account with a code (the launcher keeps the sign-in,
   // Trakt.kt). The mock links after a few seconds and has one sample next episode.
-  var TRAKT_ICON = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 13.5l3 3 5.5-6.5M8 9.5l2.5 2.5"/></svg>';
   var traktMock = { linked: {}, linking: {} };
+  // fork: Trakt, linked per person (Home settings, People, the person); pid defaults to who
   function traktOn() {
     if (TV && TV.traktState) { try { return JSON.parse(TV.traktState(who)).ready !== false; } catch (e) { return false; } }
     return MOCK;
   }
-  function traktState() {
-    if (TV && TV.traktState) { try { return JSON.parse(TV.traktState(who)); } catch (e) { return {}; } }
-    if (traktMock.linked[who]) return { linked: true, user: who + "_on_trakt" };
-    if (traktMock.linking[who]) return { linking: true, code: "8F3A C21D", url: "https://trakt.tv/activate" };
+  function traktState(pid) {
+    pid = pid || who;
+    if (TV && TV.traktState) { try { return JSON.parse(TV.traktState(pid)); } catch (e) { return {}; } }
+    if (traktMock.linked[pid]) return { linked: true, user: pid + "_on_trakt" };
+    if (traktMock.linking[pid]) return { linking: true, code: "8F3A C21D", url: "https://trakt.tv/activate" };
     return { ready: true };
   }
-  function traktLink() {
-    if (TV && TV.traktLink) { TV.traktLink(who); return; }
-    var w = who; traktMock.linking[w] = true;
+  function traktLink(pid) {
+    var w = pid || who;
+    if (TV && TV.traktLink) { TV.traktLink(w); return; }
+    traktMock.linking[w] = true;
     setTimeout(function () { delete traktMock.linking[w]; traktMock.linked[w] = true; window.tv.trakt(w); }, 4000);
   }
-  function traktCancel() { if (TV && TV.traktCancel) TV.traktCancel(who); else delete traktMock.linking[who]; }
-  function traktUnlink() { if (TV && TV.traktUnlink) TV.traktUnlink(who); else delete traktMock.linked[who]; }
+  function traktCancel(pid) { var w = pid || who; if (TV && TV.traktCancel) TV.traktCancel(w); else delete traktMock.linking[w]; }
+  function traktUnlink(pid) { var w = pid || who; if (TV && TV.traktUnlink) TV.traktUnlink(w); else delete traktMock.linked[w]; }
+  // the person's Trakt rows in their settings page: link, the code while linking, or unlink
+  function traktRows(pid) {
+    if (!traktOn()) return [];
+    var ts = traktState(pid), rows = [];
+    if (ts.linked) {
+      rows.push(info("trakt-on", "Trakt", ts.user, t("trakt_about")));
+      rows.push({ kind: "action", key: "trakt-unlink", label: t("trakt_unlink"), danger: true, act: function () { traktUnlink(pid); refresh(); } });
+    } else if (ts.linking) {
+      rows.push(info("trakt-code", t("trakt_go", { url: (ts.url || "https://trakt.tv/activate").replace(/^https?:\/\//, "") }), ts.code));
+      rows.push({ kind: "action", key: "trakt-cancel", label: t("trakt_cancel"), act: function () { traktCancel(pid); } });
+    } else {
+      rows.push({ kind: "action", key: "trakt-link", label: t("trakt_link"), sub: t("trakt_about"), act: function () { traktLink(pid); } });
+    }
+    return rows;
+  }
 
   // Google Play (fork: the sidebar's Store): straight from the launcher, else through the bridge.
   function openStore() {
@@ -1289,22 +1306,6 @@
       if (m) rows.push({ note: t("off_in", { m: m }) });
       return rows;
     }
-    if (SIDE.level === "trakt") {
-      var ts = traktState(), nm = peopleCount() ? PEOPLE[whoIndex()].name : "";
-      rows.push({ title: "Trakt" + (nm ? " \u00b7 " + nm : "") });
-      if (ts.linked) {
-        rows.push({ note: t("trakt_linked", { user: ts.user }) });
-        rows.push({ kind: "trakt-unlink", icon: TRAKT_ICON, label: t("trakt_unlink") });
-      } else if (ts.linking) {
-        rows.push({ note: t("trakt_go", { url: (ts.url || "https://trakt.tv/activate").replace(/^https?:\/\//, "") }) });
-        rows.push({ code: ts.code });
-        rows.push({ kind: "trakt-cancel", icon: TRAKT_ICON, label: t("trakt_cancel") });
-      } else {
-        rows.push({ note: t("trakt_about") });
-        rows.push({ kind: "trakt-start", icon: TRAKT_ICON, label: t("trakt_link") });
-      }
-      return rows;
-    }
     if (SIDE.level === "who") {
       rows.push({ title: t("who_watching") });
       PEOPLE.forEach(function (p) { rows.push({ kind: "pick", id: p.id, label: p.name, avatar: avatarHTML(p), check: p.id === who }); });
@@ -1333,10 +1334,6 @@
       });
     }
     rows.push({ title: t("settings") });
-    if (traktOn()) {
-      var tst = traktState();
-      rows.push({ kind: "trakt", icon: TRAKT_ICON, label: "Trakt", value: tst.linked ? tst.user : t("trakt_link_short") });
-    }
     rows.push({ kind: "home-settings", icon: ICONS.sliders, label: t("gear_home") });
     rows.push({ kind: "tv-settings", icon: ICONS.gear, label: t("gear_tv") });
     return rows;
@@ -1349,7 +1346,6 @@
     $("side-rows").innerHTML = rows.map(function (r) {
       if (r.title) return '<p class="side-sec">' + esc(r.title) + "</p>";
       if (r.note) return '<p class="side-note">' + esc(r.note) + "</p>";
-      if (r.code) return '<p class="side-code">' + esc(r.code) + "</p>";
       var f = sideFocusable(r) && k++ === SIDE.i;
       var cls = "side-row" + (r.head ? " side-head" : "") + (f ? " focus" : "") + (sideFocusable(r) ? "" : " still");
       return '<div class="' + cls + '">' + (r.avatar || (r.icon ? '<i class="sic">' + r.icon + "</i>" : "")) +
@@ -1418,11 +1414,6 @@
       return;
     }
     if (SIDE.level === "who") { sideLevel("main", 0); return; }
-    if (SIDE.level === "trakt") {
-      SIDE.level = "main";
-      sideLevel("main", Math.max(0, sideRows().map(function (r) { return r.kind; }).indexOf("trakt")));
-      return;
-    }
     closeSide();
   }
   function sideActivate() {
@@ -1445,10 +1436,6 @@
     if (r.kind === "input") { closeSide(); openInputs(); return; }
     if (r.kind === "store") { closeSide(); openStore(); return; }
     if (r.kind === "ha") { haRun(r.id); return; }   // the sidebar stays open: run another, or go
-    if (r.kind === "trakt") { sideLevel("trakt", 0); return; }
-    if (r.kind === "trakt-start") { traktLink(); renderSide(); return; }
-    if (r.kind === "trakt-cancel") { traktCancel(); renderSide(); return; }
-    if (r.kind === "trakt-unlink") { traktUnlink(); SIDE.i = 0; renderSide(); refresh(); return; }
     if (r.kind === "home-settings") { closeSide(); openSettings(); return; }
     if (r.kind === "tv-settings") { closeSide(); openTvSettings(); return; }
   }
@@ -1972,9 +1959,10 @@
         return [
           { kind: "input", key: "p-name", label: t("person_name"), value: p.name, act: function () {
             startTyping({ label: t("person_rename_type"), value: p.name, submit: function (v) { renamePerson(id, v); } });
-          } },
+          } }
+        ].concat(traktRows(id), [
           { kind: "action", key: "p-remove", label: t("person_remove", { name: p.name }), danger: true, act: function () { removePerson(id); } }
-        ];
+        ]);
       } };
     SET.keyFocus = "p-name";
   }
@@ -2502,7 +2490,7 @@
     resume: function () { okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); },
     watched: function () { if (OFFLINE) refresh(); },
     haDone: function (id, ok) { haDone(id, ok); },
-    trakt: function (w) { if (zone === "side") renderSide(); if (OFFLINE || MOCK) refresh(); },
+    trakt: function (w) { if (zone === "settings") renderSettings(); if (OFFLINE || MOCK) refresh(); },
     // the launcher's file picker has copied the chosen photos into its own storage (Home settings)
     photosAdded: function (names) { photosAdded(names); } };
 

@@ -32,7 +32,11 @@
     return { d: b, nx: 0, ny: 1 };
   }
 
-  function mapFor(w, h, r) {
+  // the map as three pictures: the top rim (corners included), one row of the sides only, and
+  // the bottom rim. The middle row is stretched to whatever height the piece has, so a change of
+  // height (More apps opening and closing) only moves the bottom rim: nothing is drawn again and
+  // the glass never changes on the way. A piece too short for that gets one picture of its size.
+  function canvasMap(w, h, r) {
     var c = document.createElement("canvas");
     c.width = w; c.height = h;
     var g = c.getContext("2d"), img = g.createImageData(w, h), px = img.data;
@@ -46,16 +50,22 @@
       }
     }
     g.putImageData(img, 0, 0);
-    return c.toDataURL();
+    return c;
+  }
+  function slice(c, y, h) {
+    var o = document.createElement("canvas");
+    o.width = c.width; o.height = h;
+    o.getContext("2d").drawImage(c, 0, y, c.width, h, 0, 0, c.width, h);
+    return o.toDataURL();
   }
 
   function build(p, el) {
     var w = Math.round(el.offsetWidth), h = Math.round(el.offsetHeight);
     if (!w || !h) return;
-    var key = w + "x" + h;
-    if (p.key === key) return;
-    p.key = key;
     var r = Math.min(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0, w / 2, h / 2);
+    var S = Math.ceil(Math.max(r, BAND)) + 1;           // rows in each rim picture
+    var split = 2 * S + 1 <= h;
+    var shape = w + "/" + Math.round(r) + "/" + (split ? "s" : h);
     var f = document.getElementById(p.id);
     if (!f) {
       f = document.createElementNS(NS, "filter");
@@ -66,22 +76,40 @@
       // a neutral grey (no bend) under the map, so wherever the map does not reach the glass
       // still shows, unbent
       f.innerHTML = '<feFlood flood-color="#808000" result="still"/>' +
-        '<feImage result="rim" preserveAspectRatio="none"/>' +
-        '<feMerge result="map"><feMergeNode in="still"/><feMergeNode in="rim"/></feMerge>' +
+        '<feImage result="top" preserveAspectRatio="none"/>' +
+        '<feImage result="mid" preserveAspectRatio="none"/>' +
+        '<feImage result="bot" preserveAspectRatio="none"/>' +
+        '<feMerge result="map"><feMergeNode in="still"/><feMergeNode in="top"/><feMergeNode in="mid"/><feMergeNode in="bot"/></feMerge>' +
         '<feDisplacementMap in="SourceGraphic" in2="map" xChannelSelector="R" yChannelSelector="G"/>';
       host.appendChild(f);
+      f.querySelector("feDisplacementMap").setAttribute("scale", STRENGTH * 2);
     }
-    // The filter's area reaches far past the piece: while the dock grows (More apps) the map is
-    // the old size until the change settles, and an area that tight cut the new part of the glass
-    // away (it went clear, then came back).
+    if (el.style.getPropertyValue("--lens") === "") el.style.setProperty("--lens", "url(#" + p.id + ")");
+    var im = f.querySelectorAll("feImage"), top = im[0], mid = im[1], bot = im[2];
+    // the filter's area reaches past the piece, so nothing of the glass is ever cut away
     f.setAttribute("x", "-2000"); f.setAttribute("y", "-2000");
     f.setAttribute("width", w + 4000); f.setAttribute("height", h + 4000);
-    var im = f.querySelector("feImage");
-    im.setAttribute("x", "0"); im.setAttribute("y", "0");
-    im.setAttribute("width", w); im.setAttribute("height", h);
-    im.setAttribute("href", mapFor(w, h, r));
-    f.querySelector("feDisplacementMap").setAttribute("scale", STRENGTH * 2);
-    el.style.setProperty("--lens", "url(#" + p.id + ")");
+    if (p.shape !== shape) {
+      p.shape = shape;
+      if (split) {
+        var c = canvasMap(w, 2 * S + 1, r);
+        top.setAttribute("href", slice(c, 0, S));
+        mid.setAttribute("href", slice(c, S, 1));
+        bot.setAttribute("href", slice(c, S + 1, S));
+      } else {
+        top.setAttribute("href", canvasMap(w, h, r).toDataURL());
+        mid.removeAttribute("href"); bot.removeAttribute("href");
+      }
+    }
+    [top, mid, bot].forEach(function (x) { x.setAttribute("x", "0"); x.setAttribute("width", w); });
+    if (split) {
+      top.setAttribute("y", "0"); top.setAttribute("height", S);
+      mid.setAttribute("y", S); mid.setAttribute("height", h - 2 * S);
+      bot.setAttribute("y", h - S); bot.setAttribute("height", S);
+    } else {
+      top.setAttribute("y", "0"); top.setAttribute("height", h);
+      mid.setAttribute("height", "0"); bot.setAttribute("height", "0");
+    }
   }
 
   var timer = null;
@@ -91,21 +119,25 @@
       if (el) build(p, el);
     });
   }
-  // after a size change has settled (More apps animates its height)
+  // a new size: a new height only moves the rim pictures (at once, every frame while the dock
+  // grows); a new width draws them again, once the change has settled
   function soon() { clearTimeout(timer); timer = setTimeout(all, 120); }
+  function resized(entries) {
+    entries.forEach(function (en) {
+      PIECES.forEach(function (p) {
+        if (en.target !== document.querySelector(p.sel)) return;
+        var w = Math.round(en.target.offsetWidth);
+        if (p.shape && p.shape.split("/")[0] === String(w) && /\/s$/.test(p.shape)) build(p, en.target);
+        else soon();
+      });
+    });
+  }
   if (window.ResizeObserver) {
-    var ro = new ResizeObserver(soon);
+    var ro = new ResizeObserver(resized);
     var watch = function () { PIECES.forEach(function (p) { var el = document.querySelector(p.sel); if (el && !el._lensWatched) { el._lensWatched = true; ro.observe(el); } }); };
     watch();
     new MutationObserver(watch).observe(document.body, { childList: true, subtree: true });
   }
   addEventListener("resize", soon);
-  // motion.js: while the dock grows (More apps) its rim is left unbent, then drawn again for the
-  // new size once it settles: the old size's rim showed as an outline of the small dock inside
-  // the growing one
-  window.tvLens = {
-    pause: function (el) { el.style.setProperty("--lens", "none"); },
-    again: function () { PIECES.forEach(function (p) { p.key = null; }); soon(); }
-  };
   setTimeout(all, 300);
 })();

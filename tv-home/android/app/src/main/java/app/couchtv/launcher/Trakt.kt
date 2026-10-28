@@ -24,6 +24,7 @@ object Trakt {
     private const val API = "https://api.trakt.tv"
     private const val SHOWS = 12                 // most recently watched shows looked at
     private const val FRESH_MS = 10 * 60_000L
+    private const val STALE_MS = 90 * 86_400_000L      // shows watched longer ago than this drop off
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     var onChange: ((String) -> Unit)? = null      // a person's list changed, or their link did
@@ -102,7 +103,7 @@ object Trakt {
     fun unlink(ctx: Context, who: String) {
         val w = safe(who) ?: return
         prefs(ctx).edit().remove("trakt.tok.$w").apply()
-        File(ctx.filesDir, "upnext4-$w.json").delete()
+        File(ctx.filesDir, "upnext5-$w.json").delete()
         main.post { onChange?.invoke(w) }
     }
 
@@ -135,7 +136,7 @@ object Trakt {
     /** The person's next episodes as last fetched; fetches again in the background when stale. */
     fun upNext(ctx: Context, who: String): String {
         val w = safe(who) ?: return "[]"
-        val f = File(ctx.filesDir, "upnext4-$w.json")
+        val f = File(ctx.filesDir, "upnext5-$w.json")
         val stale = !f.exists() || System.currentTimeMillis() - f.lastModified() > FRESH_MS
         if (stale && token(ctx, w) != null && busy.add(w)) io.execute {
             try { fetch(ctx, w)?.let { f.writeText(it.toString()); main.post { onChange?.invoke(w) } } }
@@ -211,6 +212,8 @@ object Trakt {
         val rows = (0 until watched.length()).map { watched.getJSONObject(it) }
             .sortedByDescending { it.optString("last_watched_at") }
             .filter { it.optJSONObject("show")?.optJSONObject("ids")?.optLong("trakt") !in hidden }
+            // a show not watched for three months is no longer "keep watching"
+            .filter { r -> try { System.currentTimeMillis() - java.time.Instant.parse(r.optString("last_watched_at")).toEpochMilli() < STALE_MS } catch (e: Exception) { true } }
             .take(SHOWS)
         val out = JSONArray()
         for (r in rows) {

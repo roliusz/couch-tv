@@ -401,12 +401,11 @@
     if (calm() || from === to) return;
     // the rows stay pinned to the bottom while the top edge moves, so the list is uncovered upwards
     dock.style.overflow = "hidden"; dock.style.alignContent = "end";
-    if (window.tvLens) tvLens.pause(dock);
+    // closing: Keep watching waits until the dock has shrunk past it, then fades in (glass.css);
+    // shown at once, the cards lit up behind the tall glass while it was still shrinking
+    if (to < from) root.classList.add("dock-closing");
     var a = dock.animate([{ height: from + "px" }, { height: to + "px" }], { duration: 460, easing: EASE });
-    a.onfinish = a.oncancel = function () {
-      dock.style.overflow = ""; dock.style.alignContent = "";
-      if (window.tvLens) tvLens.again();
-    };
+    a.onfinish = a.oncancel = function () { dock.style.overflow = ""; dock.style.alignContent = ""; root.classList.remove("dock-closing"); };
   }
   if (dock) {
     new MutationObserver(function () {
