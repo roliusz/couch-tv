@@ -104,7 +104,7 @@ object Trakt {
     fun unlink(ctx: Context, who: String) {
         val w = safe(who) ?: return
         prefs(ctx).edit().remove("trakt.tok.$w").apply()
-        File(ctx.filesDir, "upnext10-$w.json").delete()
+        File(ctx.filesDir, "upnext11-$w.json").delete()
         main.post { onChange?.invoke(w) }
     }
 
@@ -137,7 +137,7 @@ object Trakt {
     /** The person's next episodes as last fetched; fetches again in the background when stale. */
     fun upNext(ctx: Context, who: String): String {
         val w = safe(who) ?: return "[]"
-        val f = File(ctx.filesDir, "upnext10-$w.json")
+        val f = File(ctx.filesDir, "upnext11-$w.json")
         val stale = !f.exists() || System.currentTimeMillis() - f.lastModified() > FRESH_MS
         if (stale && token(ctx, w) != null && busy.add(w)) io.execute {
             try { fetch(ctx, w)?.let { f.writeText(it.toString()); main.post { onChange?.invoke(w) } } }
@@ -290,20 +290,11 @@ object Trakt {
                 }
             } catch (e: Exception) {}
         }
-        val watchedAll = JSONArray(s)
-        // a show only started (its first episode stopped partway) is not in the watched list yet
-        val inWatched = HashSet<Long>()
-        for (i in 0 until watchedAll.length()) watchedAll.getJSONObject(i).optJSONObject("show")?.optJSONObject("ids")?.optLong("trakt")?.let { inWatched.add(it) }
-        paused.forEach { (sid, p) ->
-            if (sid !in inWatched) watchedAll.put(JSONObject().put("show", p.getJSONObject("show")).put("last_watched_at", p.optString("paused_at")))
-        }
-        val watched = watchedAll
+        // Only finished episodes say what is recent: a pause's date cannot be trusted (old Prime
+        // Video pauses come back dated this week), so a pause never brings a show in by itself and
+        // never makes it newer. It only gives the next episode its bar (below).
+        val watched = JSONArray(s)
         val rows = (0 until watched.length()).map { watched.getJSONObject(it) }
-            .map { r ->   // a pause newer than the last finished episode counts as the show's last activity
-                val sid = r.optJSONObject("show")?.optJSONObject("ids")?.optLong("trakt")
-                val p = sid?.let { paused[it] }
-                if (p != null && p.optString("paused_at") > r.optString("last_watched_at")) JSONObject(r.toString()).put("last_watched_at", p.optString("paused_at")) else r
-            }
             .sortedByDescending { it.optString("last_watched_at") }
             .filter { it.optJSONObject("show")?.optJSONObject("ids")?.optLong("trakt") !in hidden }
             // a show not watched in the last two weeks is no longer "keep watching"
@@ -316,16 +307,11 @@ object Trakt {
             // stopped partway through the very episode that comes next: carry on with it, with its
             // bar. A pause on any other episode (an old one, The Office S3 while on S5) is left out.
             var pause = paused[id]?.takeIf { it.optString("paused_at") >= r.optString("last_watched_at") }
-            val next: JSONObject
-            if (pause != null && id !in inWatched) {
-                next = pause.getJSONObject("episode")   // only started: its first episode, partway
-            } else {
-                val (pc, ps) = call(ctx, "GET", "/shows/$id/progress/watched?hidden=false&specials=false&extended=images", bearer = tok)
-                if (pc != 200) continue
-                next = after(JSONObject(ps)) ?: continue
-                val pe = pause?.optJSONObject("episode")
-                if (pe == null || pe.optInt("season") != next.optInt("season") || pe.optInt("number") != next.optInt("number")) pause = null
-            }
+            val (pc, ps) = call(ctx, "GET", "/shows/$id/progress/watched?hidden=false&specials=false&extended=images", bearer = tok)
+            if (pc != 200) continue
+            val next = after(JSONObject(ps)) ?: continue
+            val pe = pause?.optJSONObject("episode")
+            if (pe == null || pe.optInt("season") != next.optInt("season") || pe.optInt("number") != next.optInt("number")) pause = null
             out.put(JSONObject()
                 .put("id", "t$id").put("title", show.optString("title"))
                 .put("season", next.optInt("season")).put("episode", next.optInt("number"))
