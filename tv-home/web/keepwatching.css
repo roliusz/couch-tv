@@ -29,18 +29,18 @@
   object-fit: cover; box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.35);
 }
 
-/* the band: a progressive blur of the artwork, darkening towards the bottom. Each card is its own
-   backdrop root (the no-op filter below), so the blur sees only the card's picture: seeing past it,
-   it took in the scene behind the card along the rounded edge, a light line round the card (worst
-   while it grew and shrank on focus). */
-.theme-night .ncard { filter: brightness(1); }
-.ncard .nband { position: absolute; left: -1px; right: -1px; bottom: -1px; padding: 2.75rem 1.25rem 1rem; color: #fff; }   /* 1px past the clipped edge: no hairline of unblurred picture while the card is scaled */
+/* the band: a progressive blur of the artwork, darkening towards the bottom. The blur is baked once
+   per card into a small picture (app.js, bakeBlur: the artwork drawn at an eighth of its size,
+   faded in towards the bottom), stretched back over the card. A live blur (backdrop-filter) had to
+   be worked out again on every frame the row scrolled or a card grew, which made the TV lag. */
+.ncard .nblur { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.ncard .nband { position: absolute; left: 0; right: 0; bottom: 0; padding: 2.75rem 1.25rem 1rem; color: #fff; }
 .ncard .nband::before {
   content: ""; position: absolute; inset: 0; z-index: -1;
   background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.35) 45%, rgba(0, 0, 0, 0.55) 100%);
-  -webkit-backdrop-filter: blur(16px) saturate(140%); backdrop-filter: blur(16px) saturate(140%);
-  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 50%); mask-image: linear-gradient(180deg, transparent 0%, #000 50%);
 }
+/* the row moves and the cards grow: the TV keeps each as its own ready-drawn layer */
+.theme-night .shelf-track, .theme-night .ncard { will-change: transform; }
 .ncard .nband { isolation: isolate; }
 .ncard .nband b {
   display: block; font-size: 1.375rem; line-height: 1.75rem; font-weight: 600;

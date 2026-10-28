@@ -132,11 +132,11 @@ class MainActivity : Activity() {
     }
 
     // fork: while another app is in front the home is hidden, so its page is too: the web view
-    // stops drawing and its timers (scene changes, the clock, animations) stop, and it lets go of
-    // what it had drawn. That memory and time go to the app being watched. Back home, it carries on.
+    // stops drawing and lets go of what it had drawn, for the app being watched. (Its timers are
+    // left running: pausing them is for the whole app, and once left paused the home stalled.)
     override fun onStop() {
         super.onStop()
-        web?.let { it.onPause(); it.pauseTimers() }
+        web?.onPause()
     }
 
     override fun onStart() {

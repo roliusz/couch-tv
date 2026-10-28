@@ -24,7 +24,8 @@ object Trakt {
     private const val API = "https://api.trakt.tv"
     private const val SHOWS = 12                 // most recently watched shows looked at
     private const val FRESH_MS = 10 * 60_000L
-    private const val STALE_MS = 90 * 86_400_000L      // shows watched longer ago than this drop off
+    private const val STALE_MS = 14 * 86_400_000L      // only the last two weeks: older is not "keep watching"
+    private const val CREDITS = 92.0                   // percent: this far in, only the credits are left
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     var onChange: ((String) -> Unit)? = null      // a person's list changed, or their link did
@@ -103,7 +104,7 @@ object Trakt {
     fun unlink(ctx: Context, who: String) {
         val w = safe(who) ?: return
         prefs(ctx).edit().remove("trakt.tok.$w").apply()
-        File(ctx.filesDir, "upnext8-$w.json").delete()
+        File(ctx.filesDir, "upnext10-$w.json").delete()
         main.post { onChange?.invoke(w) }
     }
 
@@ -136,7 +137,7 @@ object Trakt {
     /** The person's next episodes as last fetched; fetches again in the background when stale. */
     fun upNext(ctx: Context, who: String): String {
         val w = safe(who) ?: return "[]"
-        val f = File(ctx.filesDir, "upnext8-$w.json")
+        val f = File(ctx.filesDir, "upnext10-$w.json")
         val stale = !f.exists() || System.currentTimeMillis() - f.lastModified() > FRESH_MS
         if (stale && token(ctx, w) != null && busy.add(w)) io.execute {
             try { fetch(ctx, w)?.let { f.writeText(it.toString()); main.post { onChange?.invoke(w) } } }
@@ -274,20 +275,57 @@ object Trakt {
             for (i in 0 until a.length())
                 a.getJSONObject(i).optJSONObject("show")?.optJSONObject("ids")?.optLong("trakt")?.let { hidden.add(it) }
         }
-        val watched = JSONArray(s)
+        // episodes stopped partway (Trakt's playback, from whatever reports to it): show id ->
+        // the paused one, the most recent per show
+        val paused = HashMap<Long, JSONObject>()
+        call(ctx, "GET", "/sync/playback/episodes?extended=full&limit=50", bearer = tok).let { (pc, ps) ->
+            if (pc == 200) try {
+                val a = JSONArray(ps)
+                for (i in 0 until a.length()) {
+                    val p = a.getJSONObject(i)
+                    val sid = p.optJSONObject("show")?.optJSONObject("ids")?.optLong("trakt") ?: continue
+                    if (p.optDouble("progress", 0.0) >= CREDITS) continue
+                    val have = paused[sid]
+                    if (have == null || p.optString("paused_at") > have.optString("paused_at")) paused[sid] = p
+                }
+            } catch (e: Exception) {}
+        }
+        val watchedAll = JSONArray(s)
+        // a show only started (its first episode stopped partway) is not in the watched list yet
+        val inWatched = HashSet<Long>()
+        for (i in 0 until watchedAll.length()) watchedAll.getJSONObject(i).optJSONObject("show")?.optJSONObject("ids")?.optLong("trakt")?.let { inWatched.add(it) }
+        paused.forEach { (sid, p) ->
+            if (sid !in inWatched) watchedAll.put(JSONObject().put("show", p.getJSONObject("show")).put("last_watched_at", p.optString("paused_at")))
+        }
+        val watched = watchedAll
         val rows = (0 until watched.length()).map { watched.getJSONObject(it) }
+            .map { r ->   // a pause newer than the last finished episode counts as the show's last activity
+                val sid = r.optJSONObject("show")?.optJSONObject("ids")?.optLong("trakt")
+                val p = sid?.let { paused[it] }
+                if (p != null && p.optString("paused_at") > r.optString("last_watched_at")) JSONObject(r.toString()).put("last_watched_at", p.optString("paused_at")) else r
+            }
             .sortedByDescending { it.optString("last_watched_at") }
             .filter { it.optJSONObject("show")?.optJSONObject("ids")?.optLong("trakt") !in hidden }
-            // a show not watched for three months is no longer "keep watching"
+            // a show not watched in the last two weeks is no longer "keep watching"
             .filter { r -> try { System.currentTimeMillis() - java.time.Instant.parse(r.optString("last_watched_at")).toEpochMilli() < STALE_MS } catch (e: Exception) { true } }
             .take(SHOWS)
         val out = JSONArray()
         for (r in rows) {
             val show = r.getJSONObject("show")
             val id = show.getJSONObject("ids").getLong("trakt")
-            val (pc, ps) = call(ctx, "GET", "/shows/$id/progress/watched?hidden=false&specials=false&extended=images", bearer = tok)
-            if (pc != 200) continue
-            val next = after(JSONObject(ps)) ?: continue
+            // stopped partway through the very episode that comes next: carry on with it, with its
+            // bar. A pause on any other episode (an old one, The Office S3 while on S5) is left out.
+            var pause = paused[id]?.takeIf { it.optString("paused_at") >= r.optString("last_watched_at") }
+            val next: JSONObject
+            if (pause != null && id !in inWatched) {
+                next = pause.getJSONObject("episode")   // only started: its first episode, partway
+            } else {
+                val (pc, ps) = call(ctx, "GET", "/shows/$id/progress/watched?hidden=false&specials=false&extended=images", bearer = tok)
+                if (pc != 200) continue
+                next = after(JSONObject(ps)) ?: continue
+                val pe = pause?.optJSONObject("episode")
+                if (pe == null || pe.optInt("season") != next.optInt("season") || pe.optInt("number") != next.optInt("number")) pause = null
+            }
             out.put(JSONObject()
                 .put("id", "t$id").put("title", show.optString("title"))
                 .put("season", next.optInt("season")).put("episode", next.optInt("number"))
@@ -296,7 +334,15 @@ object Trakt {
                 .put("watch", whereToWatch(ctx, id, tok))
                 .put("streams", streamsHere(ctx, show.getJSONObject("ids").optLong("tmdb")))
                 .put("art", art(ctx, id, show) ?: picture(next) ?: JSONObject.NULL)
-                .put("last_played", r.optString("last_watched_at")))
+                .put("last_played", r.optString("last_watched_at"))
+                .apply {
+                    if (pause != null) {
+                        val pct = pause.optDouble("progress", 0.0) / 100
+                        put("progress", pct)
+                        val rt = pause.optJSONObject("episode")?.optInt("runtime") ?: 0
+                        if (rt > 0) put("remaining_min", Math.max(1, Math.round(rt * (1 - pct)).toInt()))
+                    }
+                })
         }
         return out
     }

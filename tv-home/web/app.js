@@ -706,8 +706,32 @@
             "<span>" + esc(meta) + "</span></div></div></div>";
       }).join("");
       shelfEls = Array.prototype.slice.call(track.children);
+      shelfEls.forEach(function (el) {
+        var im = el.querySelector("img.nart");
+        if (!im) return;
+        if (im.complete && im.naturalWidth) bakeBlur(el, im); else im.addEventListener("load", function () { bakeBlur(el, im); }, { once: true });
+      });
       return;
     }
+  }
+  // fork: the card's blurred band, drawn once: the artwork at an eighth of the card's size (shrinking
+  // it is the blur; stretched back it is soft), faded in from the middle down (keepwatching.css)
+  function bakeBlur(card, im) {
+    if (card.querySelector(".nblur")) return;
+    var W = 48, H = Math.round(W * card.offsetHeight / Math.max(1, card.offsetWidth)) || 30;
+    var c = document.createElement("canvas");
+    c.width = W; c.height = H; c.className = "nblur";
+    var g = c.getContext("2d");
+    var s = Math.max(W / im.naturalWidth, H / im.naturalHeight), w = im.naturalWidth * s, h = im.naturalHeight * s;
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+    g.filter = "saturate(140%)";
+    g.drawImage(im, (W - w) / 2, (H - h) / 2, w, h);
+    g.filter = "none";
+    g.globalCompositeOperation = "destination-in";
+    var fade = g.createLinearGradient(0, 0, 0, H);
+    fade.addColorStop(0.48, "rgba(0,0,0,0)"); fade.addColorStop(0.74, "rgba(0,0,0,1)");
+    g.fillStyle = fade; g.fillRect(0, 0, W, H);
+    im.parentNode.insertBefore(c, im.nextSibling);
   }
 
   // ---------------- apps ----------------
@@ -963,19 +987,23 @@
   function toPeople() { zone = "people"; pi = whoIndex(); }
 
   // ---- fork: the top shelf. Resting on a Keep watching card, its show fills the screen behind the
-  // home, as on Apple TV: the artwork (Trakt's full size where it has one), the title and what is
-  // next, with the scene's clock and date faded away. Moving along the row crossfades from show to
-  // show once focus has settled for a moment; leaving the row brings the scene back.
-  var TS = { timer: null, on: false, front: 0, url: "" };
-  function bigArt(u) { return /media\.trakt\.tv\/.*\/medium\//.test(u || "") ? u.replace("/medium/", "/full/") : u; }
+  // home, as on Apple TV: the artwork, the title and what is next, with the scene's clock and date
+  // faded away. Moving along the row changes show only once focus has settled (passing cards cost
+  // nothing), and the picture is decoded before it fades in, so the fade never stutters. The card's
+  // own picture (1280 wide) is used, not a full-size one: fast to decode, and the TV draws at 1080p.
+  var TS = { timer: null, on: false, front: 0, url: "", want: "" };
+
   function topShelf() {
-    clearTimeout(TS.timer);
     var it = zone === "shelf" && !expanded ? data.shows[s] : null, art = it && (it.backdrop || it.poster);
-    if (!art) { topShelfOff(); return; }
-    TS.timer = setTimeout(function () { topShelfShow(it, art); }, TS.on ? 250 : 450);
+    if (!art) { clearTimeout(TS.timer); TS.want = ""; topShelfOff(); return; }
+    // a redraw of the same card (a refresh, Now Playing) neither restarts the wait nor shows it again
+    if (art === TS.want) return;
+    clearTimeout(TS.timer);
+    TS.want = art;
+    TS.timer = setTimeout(function () { topShelfShow(it, art); }, TS.on ? 450 : 600);
   }
   function topShelfShow(it, art) {
-    var box = $("topshelf"), pics = box.querySelectorAll(".ts-pic"), url = bigArt(art);
+    var box = $("topshelf"), pics = box.querySelectorAll(".ts-pic"), url = art;
     var ep = it.season && it.episode ? "S" + it.season + ", E" + it.episode : "";
     box.querySelector(".ts-title").textContent = it.title || "";
     box.querySelector(".ts-meta").textContent = [it.next ? t("up_next") : "", ep, it.episode_title || "", it.app ? it.app.name : ""]
@@ -983,13 +1011,17 @@
     if (url !== TS.url) {
       TS.url = url;
       var back = pics[TS.front], next = pics[1 - TS.front];
-      next.onload = function () { next.classList.add("on"); back.classList.remove("on"); TS.front = 1 - TS.front; };
-      next.onerror = function () { if (next.src !== art) next.src = art; };   // no full size: the card's own
+      next.onload = function () {
+        var show = function () { if (TS.url !== url) return; next.classList.add("on"); back.classList.remove("on"); TS.front = 1 - TS.front; };
+        if (next.decode) next.decode().then(show, show); else show();
+      };
+      next.onerror = null;
       next.src = url;
     }
     if (!TS.on) { TS.on = true; document.documentElement.classList.add("shelfing"); if (window.tvAdapt) tvAdapt(); }
   }
   function topShelfOff() {
+    clearTimeout(TS.timer); TS.want = "";
     if (!TS.on) return;
     TS.on = false; TS.url = "";
     document.documentElement.classList.remove("shelfing");
@@ -2512,7 +2544,9 @@
     };
     // live TV and YouTube are not shows to come back to: left out
     var NOT_SHOWS = /^(com\.google\.android\.youtube\.tv|com\.sony\.dtv\.tv.*|com\.google\.android\.tv)$/;
-    var shows = list.filter(function (e) { return !NOT_SHOWS.test(e.package || ""); }).map(function (e) {
+    // and only the last two weeks: older is not "keep watching"
+    var since = Date.now() - 14 * 86400000;
+    var shows = list.filter(function (e) { return !NOT_SHOWS.test(e.package || "") && (e.last_played || 0) >= since; }).map(function (e) {
       return { id: e.id, title: e.title, episode_title: e.episode_title || null, season: e.season || null, episode: e.episode || null,
         app: { package: e.package, name: nameOf(e.package) }, backdrop: e.art || null, progress: e.progress,
         remaining_min: e.remaining_min || 0, who: e.who || null, source: "tv", last_played: e.last_played || 0 };
@@ -2548,7 +2582,9 @@
     return list.map(function (e) {
       return { id: e.id, title: e.title, season: e.season, episode: e.episode, episode_title: e.episode_title || null,
         app: (e.streams || []).map(appForNetwork).filter(Boolean)[0] || appForNetwork(e.network) ||
-          (e.watch || []).map(appForNetwork).filter(Boolean)[0] || null, backdrop: e.art || null, progress: null, next: true, source: "tv",
+          (e.watch || []).map(appForNetwork).filter(Boolean)[0] || null, backdrop: e.art || null,
+        // an episode stopped partway (Trakt's playback) carries on with its bar: no "Next"
+        progress: e.progress != null ? e.progress : null, remaining_min: e.remaining_min || 0, next: e.progress == null, trakt: true, source: "tv",
         last_played: Date.parse(e.last_played) || 0 };
     });
   }
@@ -2566,7 +2602,7 @@
       out[i] = n;
     });
     // Trakt's shows first, then what the TV recorded itself (YouTube TV); newest first in each
-    return out.sort(function (a, b) { return (b.next ? 1 : 0) - (a.next ? 1 : 0) || when(b) - when(a); });
+    return out.sort(function (a, b) { return (b.trakt ? 1 : 0) - (a.trakt ? 1 : 0) || when(b) - when(a); });
   }
 
   function refresh() {

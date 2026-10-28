@@ -14,7 +14,7 @@
 .theme-night.idle .top-left { translate: 0 -12rem; }
 .theme-night.idle .np { translate: 0 -26rem; }
 
-.theme-night .scenes { transition: filter 2s ease-in-out; }
+/* (the scenes' transition, filter included, is in topshelf.css) */
 .theme-night.idle .scenes { filter: brightness(0.82); animation: idle-drift 240s ease-in-out infinite alternate; }
 /* the date itself (moving its container would place it against that instead of the screen) */
 .theme-night.idle .date { animation: idle-drift-date 240s ease-in-out infinite alternate; }
