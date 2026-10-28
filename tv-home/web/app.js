@@ -295,7 +295,7 @@
     { id: "fog", photo: "scene-fog", fg: true, glass: true },
     { id: "dawn", photo: "scene-dawn", fg: true, glass: true }
   ].concat(window.MY_SCENES || []);   // fork: the household's own (backgrounds/mine/scenes.js)
-  var SCENES = SCENE_LIB.slice(), SCENE_MS = 20000;
+  var SCENES = SCENE_LIB.slice(), SCENE_MS = 20000, sceneTimer = null;
   var scene = 0, sceneEls = [], glassShown = "";
 
   // The household's own photos (Home settings, "Your photos") are scenes too, with no cut-out and
@@ -1921,14 +1921,14 @@
     st.order.forEach(function (id) {
       var sc = sceneById(id);
       if (!sc) return;
-      rows.push({ kind: "check", key: "scene:" + id, label: sc.own ? t("scene_photo", { n: sc.n }) : t("scene_" + id),
+      rows.push({ kind: "check", key: "scene:" + id, label: sc.own ? t("scene_photo", { n: sc.n }) : sc.name || t("scene_" + id),
         thumb: sc.own ? sc.src : "backgrounds/" + sc.photo + ".jpg", checked: st.off.indexOf(id) < 0,
         act: function () { toggleScene(id); }, move: function (d) { moveScene(id, d); } });
     });
     var secs = Math.round(SCENE_MS / 1000);
     rows.push({ kind: "cycle", key: "scene-secs", label: t("scene_secs"), value: t("n_secs", { n: secs }), act: function () {
       var i = SECS_STEPS.indexOf(secs), n = i < 0 ? 20 : SECS_STEPS[(i + 1) % SECS_STEPS.length];
-      ST.scene_seconds = n; SCENE_MS = n * 1000; saveSettings();
+      ST.scene_seconds = n; SCENE_MS = n * 1000; saveSettings(); applyScenes();
     } });
     rows.push({ kind: "cycle", key: "clock", label: t("clock"), value: CLOCK24 ? t("clock_24") : t("clock_12"), act: function () {
       CLOCK24 = !CLOCK24; ST.clock = CLOCK24 ? "24h" : "12h"; saveSettings(); glassShown = ""; clock();
@@ -1946,7 +1946,20 @@
     rows.push(info("photos-note", t("photos_note")));
     return rows;
   }
-  function setScenes(st) { ST.scene_order = st.order; ST.scenes_off = st.off; saveSettings(); }
+  function setScenes(st) { ST.scene_order = st.order; ST.scenes_off = st.off; saveSettings(); applyScenes(); }
+  // fork: a change to the scenes or their timing shows at once, not only after the page starts
+  // again (that restart, on leaving Home settings, was sometimes missed and the old set stayed)
+  function applyScenes() {
+    var st = sceneState();
+    SCENES = st.order.filter(function (id) { return st.off.indexOf(id) < 0; }).map(sceneById).filter(Boolean);
+    if (!SCENES.length) SCENES = [SCENE_LIB[0]];
+    $("scenes").innerHTML = "";
+    buildScenes();
+    scene = 0;
+    showScene(0);
+    clearInterval(sceneTimer);
+    if (SCENES.length > 1) sceneTimer = setInterval(nextScene, SCENE_MS);
+  }
   function toggleScene(id) {
     var st = sceneState(), i = st.off.indexOf(id);
     if (i >= 0) st.off.splice(i, 1);
@@ -2699,7 +2712,7 @@
       // ?scene=fog starts on that scene, for previews (?scene=own: the first of the household's photos)
       var first = (Q.match(/[?&]scene=([a-z]+)/) || [])[1];
       showScene(Math.max(0, SCENES.map(function (s) { return s.own ? "own" : s.id; }).indexOf(first)));
-      if (SCENES.length > 1) setInterval(nextScene, SCENE_MS);
+      if (SCENES.length > 1) sceneTimer = setInterval(nextScene, SCENE_MS);
       // the clock font must be in before the glass is measured
       if (document.fonts) document.fonts.load("300 10px Antonio").then(function () { glassShown = ""; clock(); });
       refreshWeather();
