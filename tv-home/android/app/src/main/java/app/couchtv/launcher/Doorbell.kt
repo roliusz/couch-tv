@@ -125,7 +125,7 @@ object Doorbell {
         }
         frame.addView(band, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, (56 * dp).toInt(), Gravity.BOTTOM))
         val label = TextView(ctx).apply {
-            text = "🔔  " + b.optString("name").ifEmpty { "Doorbell" }
+            text = b.optString("name").ifEmpty { "Doorbell" }
             setTextColor(Color.WHITE); textSize = 15f
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
             setShadowLayer(6f, 0f, 1f, Color.parseColor("#80000000"))
@@ -142,7 +142,8 @@ object Doorbell {
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT).apply {
             gravity = Gravity.TOP or Gravity.END
-            x = (32 * dp).toInt(); y = (32 * dp).toInt()
+            // just above the Now Playing card's top (60px), so the doorbell covers it completely
+            x = (32 * dp).toInt(); y = (26 * dp).toInt()
         }
         try { wm.addView(frame, lp) } catch (e: Exception) { return }
         frame.requestFocus()
