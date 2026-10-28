@@ -1576,14 +1576,23 @@
   function npAct(what) {
     if (!NP) return;
     if (MOCK) mockNp(what);
-    else if (window.TVNP_ACTION) window.TVNP_ACTION(what);   // Home Assistant, later
+    else if (TV && TV.haPlayer) {   // fork: Home Assistant's speaker (MainActivity), shown at once
+      TV.haPlayer(what);
+      if (what === "play") NP.state = NP.state === "playing" ? "paused" : "playing";
+    }
     renderNp();
   }
-  // Home Assistant (later) hands the player's state here: { state: "playing" | "paused" | "idle",
+  // Home Assistant (MainActivity, the speakers in ha.json "players") hands the player's state here: { state: "playing" | "paused" | "idle",
   // title, artist, album, picture (artwork URL) or art (a CSS background), duration, position, speaker }
   window.tvNowPlaying = function (st) {
     var was = npOn();
     NP = st;
+    // the time moves on here every second; the launcher only sends a new song, state or jump
+    if (!MOCK && !npTimer) npTimer = setInterval(function () {
+      if (!NP || NP.state !== "playing") return;
+      NP.position = Math.min((NP.position || 0) + 1, NP.duration || Infinity);
+      npTime();
+    }, 1000);
     if (!npOn() && zone === "np") fromNp();
     renderNp();
     if (was !== npOn() && window.tvMotion && tvMotion.np) tvMotion.np(npOn());

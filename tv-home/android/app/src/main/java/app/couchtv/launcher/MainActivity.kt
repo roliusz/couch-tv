@@ -122,11 +122,13 @@ class MainActivity : Activity() {
             }
         } else if (offline || fallback != null) connect()
         io.execute { warmApps() }
+        main.removeCallbacks(npPoll); main.post(npPoll)
     }
 
     override fun onPause() {
         super.onPause()
         resumed = false
+        main.removeCallbacks(npPoll)
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -216,6 +218,89 @@ class MainActivity : Activity() {
                 c.disconnect()
             } catch (e: Exception) {}
             main.post { js("window.tv && tv.haDone && tv.haDone(" + JSONObject.quote(entity) + "," + ok + ")") }
+        }
+    }
+
+    // Now Playing (fork): the speakers named in ha.json ("players"). While the home is in front,
+    // the first one playing (else the first paused) is read from Home Assistant every few seconds
+    // and handed to the page's Now Playing card; nothing playing hides it. The page's controls come
+    // back here as Home Assistant's media_player services.
+    private var npShown: String? = null
+    private var npEntity: String? = null
+    private val npPoll = object : Runnable {
+        override fun run() {
+            if (!resumed) return
+            haPlayersNow()
+            main.postDelayed(this, 5000)
+        }
+    }
+    private fun haGet(h: JSONObject, path: String): JSONObject? = try {
+        val c = java.net.URL(h.getString("url").trimEnd('/') + path).openConnection() as HttpURLConnection
+        c.connectTimeout = 3000; c.readTimeout = 5000
+        c.setRequestProperty("Authorization", "Bearer " + h.optString("token"))
+        val o = if (c.responseCode == 200) JSONObject(c.inputStream.bufferedReader().use { it.readText() }) else null
+        c.disconnect(); o
+    } catch (e: Exception) { null }
+
+    private fun haPlayersNow() {
+        val h = ha() ?: return
+        val players = h.optJSONArray("players") ?: return
+        if (players.length() == 0) return
+        io.execute {
+            var pick: JSONObject? = null
+            for (i in 0 until players.length()) {
+                val id = players.optString(i)
+                if (!Regex("media_player\\.[a-z0-9_]+").matches(id)) continue
+                val st = haGet(h, "/api/states/$id") ?: continue
+                val state = st.optString("state")
+                if (state == "playing") { pick = st; break }
+                if (state == "paused" && pick == null) pick = st
+            }
+            val out = JSONObject()
+            if (pick == null) out.put("state", "idle") else {
+                val a = pick.optJSONObject("attributes") ?: JSONObject()
+                var pos = a.optDouble("media_position", 0.0)
+                if (pick.optString("state") == "playing") a.optString("media_position_updated_at").takeIf { it.isNotEmpty() }?.let {
+                    try { pos += (System.currentTimeMillis() - java.time.OffsetDateTime.parse(it).toInstant().toEpochMilli()) / 1000.0 } catch (e: Exception) {}
+                }
+                val pic = a.optString("entity_picture").takeIf { it.isNotEmpty() }?.let {
+                    if (it.startsWith("http")) it else h.getString("url").trimEnd('/') + it
+                }
+                out.put("state", pick.optString("state"))
+                    .put("title", a.optString("media_title"))
+                    .put("artist", a.optString("media_artist").ifEmpty { a.optString("media_album_artist") })
+                    .put("album", a.optString("media_album_name"))
+                    .put("duration", a.optDouble("media_duration", 0.0))
+                    .put("position", pos)
+                    .put("speaker", a.optString("friendly_name"))
+                pic?.let { out.put("picture", it) }
+                npEntity = pick.optString("entity_id")
+            }
+            // the page moves the time on by itself: only a new song, a new state or a jump is sent
+            val sig = out.optString("state") + "|" + out.optString("title") + "|" + out.optString("artist") + "|" + (out.optDouble("position", 0.0) / 10).toInt()
+            main.post {
+                if (sig == npShown) return@post
+                npShown = sig
+                js("window.tvNowPlaying && tvNowPlaying(" + out.toString() + ")")
+            }
+        }
+    }
+
+    private fun haPlayer(action: String) {
+        val h = ha() ?: return
+        val id = npEntity ?: return
+        val svc = when (action) { "play" -> "media_play_pause"; "next" -> "media_next_track"; "prev" -> "media_previous_track"; else -> return }
+        io.execute {
+            try {
+                val c = java.net.URL(h.getString("url").trimEnd('/') + "/api/services/media_player/" + svc).openConnection() as HttpURLConnection
+                c.requestMethod = "POST"; c.doOutput = true
+                c.connectTimeout = 3000; c.readTimeout = 6000
+                c.setRequestProperty("Authorization", "Bearer " + h.optString("token"))
+                c.setRequestProperty("Content-Type", "application/json")
+                c.outputStream.use { it.write(JSONObject().put("entity_id", id).toString().toByteArray()) }
+                c.responseCode; c.disconnect()
+            } catch (e: Exception) {}
+            main.postDelayed({ npShown = null; haPlayersNow() }, 700)   // show the change straight away
         }
     }
 
@@ -566,6 +651,8 @@ class MainActivity : Activity() {
 
         @JavascriptInterface
         fun haRun(entity: String) = haRunScene(entity)
+        @JavascriptInterface
+        fun haPlayer(action: String) = main.post { this@MainActivity.haPlayer(action) }
 
         // fork: Trakt next episodes (Trakt.kt). Tokens stay in the launcher.
         @JavascriptInterface
