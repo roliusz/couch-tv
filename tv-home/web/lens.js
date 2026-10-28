@@ -100,5 +100,12 @@
     new MutationObserver(watch).observe(document.body, { childList: true, subtree: true });
   }
   addEventListener("resize", soon);
+  // motion.js: while the dock grows (More apps) its rim is left unbent, then drawn again for the
+  // new size once it settles: the old size's rim showed as an outline of the small dock inside
+  // the growing one
+  window.tvLens = {
+    pause: function (el) { el.style.setProperty("--lens", "none"); },
+    again: function () { PIECES.forEach(function (p) { p.key = null; }); soon(); }
+  };
   setTimeout(all, 300);
 })();

@@ -401,8 +401,12 @@
     if (calm() || from === to) return;
     // the rows stay pinned to the bottom while the top edge moves, so the list is uncovered upwards
     dock.style.overflow = "hidden"; dock.style.alignContent = "end";
+    if (window.tvLens) tvLens.pause(dock);
     var a = dock.animate([{ height: from + "px" }, { height: to + "px" }], { duration: 460, easing: EASE });
-    a.onfinish = a.oncancel = function () { dock.style.overflow = ""; dock.style.alignContent = ""; };
+    a.onfinish = a.oncancel = function () {
+      dock.style.overflow = ""; dock.style.alignContent = "";
+      if (window.tvLens) tvLens.again();
+    };
   }
   if (dock) {
     new MutationObserver(function () {

@@ -892,7 +892,23 @@
 
   function appHTML(it) { return dockHTML(it); }
 
+  // fork: every app's icon is fetched and decoded ahead, so More apps opens with its icons in
+  // place instead of empty tiles that fill in while it grows
+  var warmed = {}, warmKeep = [];
+  function warmIcons() {
+    (data.apps || []).forEach(function (a) {
+      var u = iconUrl(a.package);
+      if (!u || warmed[u]) return;
+      warmed[u] = true;
+      var im = new Image();
+      im.src = u;
+      if (im.decode) im.decode().catch(function () {});
+      warmKeep.push(im);   // held, so the decoded picture stays in memory
+    });
+  }
+
   function renderGrid() {
+    warmIcons();
     document.documentElement.classList.toggle("expanded", expanded);
     document.documentElement.classList.toggle("lifting", !!lift);
     gridItems = gridList();

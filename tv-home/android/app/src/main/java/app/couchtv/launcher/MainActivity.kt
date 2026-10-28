@@ -883,7 +883,7 @@ class MainActivity : Activity() {
         private const val PICK_PHOTOS = 41
         private const val MATCH_W = ViewGroup.LayoutParams.MATCH_PARENT
         private val MATCH = FrameLayout.LayoutParams(MATCH_W, MATCH_W)
-        private val GROUND = Color.parseColor("#0D1E19")
+        private val GROUND = Color.parseColor("#000000")   // fork: black before the home draws (was a dark green)
         private val FLAP = Color.parseColor("#131614")
         private val CREAM = Color.parseColor("#F2EAD8")
         private val CREAM_2 = Color.parseColor("#BDB6A7")
