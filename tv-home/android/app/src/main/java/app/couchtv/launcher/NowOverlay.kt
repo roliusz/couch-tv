@@ -131,7 +131,10 @@ object NowOverlay {
                     title?.text = a.optString("media_title")
                     artist?.text = a.optString("media_artist").ifEmpty { a.optString("media_album_artist") }
                     pos = at; dur = length; playing = true; times()
-                    if (bmp != null) { art?.setImageBitmap(bmp); artUrl = pic }
+                    if (bmp != null) {
+                        art?.setImageBitmap(bmp); artUrl = pic
+                        card?.let { it.background = paneBg(frost(bmp), 44 * ctx.resources.displayMetrics.widthPixels / 1920f) }
+                    }
                 }
             }
         }
@@ -147,13 +150,9 @@ object NowOverlay {
         val pane = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             setPadding(d(20f), d(20f), d(36f), d(20f))
-            // the dock's glass as near as a window can come with blur switched off on this TV: a milky
-            // white wash, lighter at the top like the dock's specular light, and its bright rim
-            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(Color.parseColor("#4DFFFFFF"), Color.parseColor("#33FFFFFF"))).apply {
-                cornerRadius = r
-                setStroke(d(2f).coerceAtLeast(1), Color.parseColor("#66FFFFFF"))
-            }
+            // smooth frosted glass whatever ambient shows behind it: the song's artwork, blurred
+            // (frost(), when it arrives), under a dark tint and the glass rim. Until then, the tint.
+            background = paneBg(null, r)
             outlineProvider = object : ViewOutlineProvider() { override fun getOutline(v: View, o: Outline) { o.setRoundRect(0, 0, v.width, v.height, r) } }
             clipToOutline = true; elevation = 8 * px
         }
@@ -218,6 +217,33 @@ object NowOverlay {
         pane.alpha = 0f; pane.translationY = 40 * px
         pane.animate().alpha(1f).translationY(0f).setDuration(500).start()
         main.removeCallbacks(tick); main.postDelayed(tick, 1000)
+    }
+
+    /** A strong, smooth blur of the artwork: shrunk to a few pixels and drawn back up, twice. */
+    private fun frost(b: android.graphics.Bitmap): android.graphics.Bitmap {
+        // only the artwork's colours, left to right, as one soft gradient (no shapes left), a little
+        // muted so the bar is calm rather than loud
+        val tiny = android.graphics.Bitmap.createScaledBitmap(b, 4, 1, true)
+        val out = android.graphics.Bitmap.createBitmap(384, 48, android.graphics.Bitmap.Config.ARGB_8888)
+        val c = android.graphics.Canvas(out)
+        val p = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
+            colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(0.6f) })
+        }
+        c.drawBitmap(tiny, null, android.graphics.Rect(0, 0, 384, 48), p)
+        return out
+    }
+
+    private fun paneBg(frosted: android.graphics.Bitmap?, r: Float): android.graphics.drawable.Drawable {
+        val layers = ArrayList<android.graphics.drawable.Drawable>()
+        if (frosted != null) layers.add(android.graphics.drawable.BitmapDrawable(app!!.resources, frosted).apply { isFilterBitmap = true })
+        // the tint: darker without the artwork, so the text always reads
+        layers.add(GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, if (frosted != null)
+            intArrayOf(Color.parseColor("#80000000"), Color.parseColor("#A6000000")) else
+            intArrayOf(Color.parseColor("#B3202026"), Color.parseColor("#CC18181C"))).apply { cornerRadius = r })
+        // the glass rim and a soft light along the top, as the dock's specular edge
+        layers.add(GradientDrawable().apply { cornerRadius = r; setColor(Color.TRANSPARENT)
+            setStroke(maxOf(1, (2 * r / 44).toInt()), Color.parseColor("#59FFFFFF")) })
+        return android.graphics.drawable.LayerDrawable(layers.toTypedArray())
     }
 
     private fun hide() {
