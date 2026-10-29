@@ -32,7 +32,7 @@ import java.util.concurrent.Executors
  * ha.json ("players") are read from Home Assistant every few seconds as the home does, and while
  * one plays the rest-mode music bar floats along the bottom, above ambient's clock: the artwork, "Playing on <speaker>", the song, the artist
  * and how far in. It has no buttons (the screensaver has the remote; any key ends it). This TV
- * has window blur switched off, so the card is a translucent dark pane rather than real glass.
+ * has window blur switched off, so there is no box: the row sits on the photo over a soft shade.
  */
 object NowOverlay {
     private const val POLL_MS = 5000L
@@ -133,7 +133,6 @@ object NowOverlay {
                     pos = at; dur = length; playing = true; times()
                     if (bmp != null) {
                         art?.setImageBitmap(bmp); artUrl = pic
-                        card?.let { it.background = paneBg(frost(bmp), 44 * ctx.resources.displayMetrics.widthPixels / 1920f) }
                     }
                 }
             }
@@ -150,11 +149,6 @@ object NowOverlay {
         val pane = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             setPadding(d(20f), d(20f), d(36f), d(20f))
-            // smooth frosted glass whatever ambient shows behind it: the song's artwork, blurred
-            // (frost(), when it arrives), under a dark tint and the glass rim. Until then, the tint.
-            background = paneBg(null, r)
-            outlineProvider = object : ViewOutlineProvider() { override fun getOutline(v: View, o: Outline) { o.setRoundRect(0, 0, v.width, v.height, r) } }
-            clipToOutline = true; elevation = 8 * px
         }
         val img = ImageView(ctx).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP; setBackgroundColor(Color.parseColor("#33FFFFFF"))
@@ -207,43 +201,25 @@ object NowOverlay {
             }
         }
         ctl.setLayerType(View.LAYER_TYPE_SOFTWARE, null)   // for the soft shadow
-        pane.addView(ctl, LinearLayout.LayoutParams(d(150f), d(38f)).apply { leftMargin = d(28f) })
-        val lp = WindowManager.LayoutParams(ctx.resources.displayMetrics.widthPixels - d(160f), WindowManager.LayoutParams.WRAP_CONTENT,
+        pane.addView(ctl, LinearLayout.LayoutParams(d(180f), d(38f)).apply { leftMargin = d(28f) })   // the symbols reach 8.2 half-heights
+        // no box: the row sits on the photo, over a soft shade that darkens the bottom of the screen
+        // from clear to about half (as ambient does behind its own clock and captions)
+        val shade = FrameLayout(ctx).apply {
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(Color.TRANSPARENT, Color.parseColor("#4D000000"), Color.parseColor("#8C000000")))
+        }
+        shade.addView(pane, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM).apply {
+            leftMargin = d(80f); rightMargin = d(80f); bottomMargin = d(120f)   // above ambient's clock and caption
+        })
+        val lp = WindowManager.LayoutParams(WindowManager.LayoutParams.MATCH_PARENT, d(380f),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT).apply { gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL; y = d(120f) }   // above ambient's clock and caption
-        try { wm.addView(pane, lp) } catch (ex: Exception) { return }
-        card = pane; art = img; where = w; title = t; artist = a; bar = pb; el = e; rem = rm; artUrl = null
-        pane.alpha = 0f; pane.translationY = 40 * px
-        pane.animate().alpha(1f).translationY(0f).setDuration(500).start()
+            PixelFormat.TRANSLUCENT).apply { gravity = Gravity.BOTTOM }
+        try { wm.addView(shade, lp) } catch (ex: Exception) { return }
+        card = shade; art = img; where = w; title = t; artist = a; bar = pb; el = e; rem = rm; artUrl = null
+        shade.alpha = 0f
+        shade.animate().alpha(1f).setDuration(600).start()
         main.removeCallbacks(tick); main.postDelayed(tick, 1000)
-    }
-
-    /** A strong, smooth blur of the artwork: shrunk to a few pixels and drawn back up, twice. */
-    private fun frost(b: android.graphics.Bitmap): android.graphics.Bitmap {
-        // only the artwork's colours, left to right, as one soft gradient (no shapes left), a little
-        // muted so the bar is calm rather than loud
-        val tiny = android.graphics.Bitmap.createScaledBitmap(b, 4, 1, true)
-        val out = android.graphics.Bitmap.createBitmap(384, 48, android.graphics.Bitmap.Config.ARGB_8888)
-        val c = android.graphics.Canvas(out)
-        val p = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
-            colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(0.6f) })
-        }
-        c.drawBitmap(tiny, null, android.graphics.Rect(0, 0, 384, 48), p)
-        return out
-    }
-
-    private fun paneBg(frosted: android.graphics.Bitmap?, r: Float): android.graphics.drawable.Drawable {
-        val layers = ArrayList<android.graphics.drawable.Drawable>()
-        if (frosted != null) layers.add(android.graphics.drawable.BitmapDrawable(app!!.resources, frosted).apply { isFilterBitmap = true })
-        // the tint: darker without the artwork, so the text always reads
-        layers.add(GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, if (frosted != null)
-            intArrayOf(Color.parseColor("#80000000"), Color.parseColor("#A6000000")) else
-            intArrayOf(Color.parseColor("#B3202026"), Color.parseColor("#CC18181C"))).apply { cornerRadius = r })
-        // the glass rim and a soft light along the top, as the dock's specular edge
-        layers.add(GradientDrawable().apply { cornerRadius = r; setColor(Color.TRANSPARENT)
-            setStroke(maxOf(1, (2 * r / 44).toInt()), Color.parseColor("#59FFFFFF")) })
-        return android.graphics.drawable.LayerDrawable(layers.toTypedArray())
     }
 
     private fun hide() {
