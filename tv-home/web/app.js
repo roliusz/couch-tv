@@ -2623,6 +2623,7 @@
     if (TV && TV.traktUpNext) { try { list = JSON.parse(TV.traktUpNext(pid)) || []; } catch (e) { list = []; } }
     else if (MOCK && traktMock.linked[pid]) list = MOCK_TRAKT;
     return list.map(function (e) {
+      if (e.finished) return { id: e.id, title: e.title, finished: true };
       return { id: e.id, title: e.title, season: e.season, episode: e.episode, episode_title: e.episode_title || null,
         app: (e.streams || []).map(appForNetwork).filter(Boolean)[0] || appForNetwork(e.network) ||
           (e.watch || []).map(appForNetwork).filter(Boolean)[0] || null, backdrop: e.art || null,
@@ -2634,15 +2635,27 @@
   function mergeTrakt(mine, next) {
     var key = function (x) { return String(x.title || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); };
     var when = function (x) { return typeof x.last_played === "string" ? (Date.parse(x.last_played) || 0) : (x.last_played || 0); };
-    var out = mine.slice();
+    // a show Trakt says is finished (the last episode watched) leaves the row, the TV's card too
+    var done = next.filter(function (n) { return n.finished; }).map(key);
+    var out = mine.filter(function (x) { return done.indexOf(key(x)) < 0; });
+    next = next.filter(function (n) { return !n.finished; });
     next.forEach(function (n) {
       var i = -1;
       out.forEach(function (x, j) { if (i < 0 && key(x) === key(n)) i = j; });
       if (i < 0) { out.push(n); return; }
       var tv = out[i];
-      if (when(tv) > n.last_played) return;   // watched here since Trakt last heard
-      n.app = tv.app || n.app; n.backdrop = n.backdrop || tv.backdrop;
-      out[i] = n;
+      var merged = Object.assign({}, n, { app: tv.app || n.app, backdrop: n.backdrop || tv.backdrop });
+      // watched here since Trakt last heard: the TV's own record says where you are, but only as
+      // far as it knows (HBO Max, say, gives the title and nothing else), so Trakt's picture and
+      // episode stay unless the TV knows an episode and how far in
+      if (when(tv) > n.last_played) {
+        merged.last_played = when(tv);
+        if (tv.season && tv.episode && tv.progress != null) {
+          merged.season = tv.season; merged.episode = tv.episode; merged.episode_title = tv.episode_title || null;
+          merged.progress = tv.progress; merged.remaining_min = tv.remaining_min || 0; merged.next = false;
+        }
+      }
+      out[i] = merged;
     });
     // Trakt's shows first, then what the TV recorded itself (YouTube TV); newest first in each
     return out.sort(function (a, b) { return (b.trakt ? 1 : 0) - (a.trakt ? 1 : 0) || when(b) - when(a); });

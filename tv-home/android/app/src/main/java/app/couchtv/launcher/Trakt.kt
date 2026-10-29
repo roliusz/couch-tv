@@ -104,7 +104,7 @@ object Trakt {
     fun unlink(ctx: Context, who: String) {
         val w = safe(who) ?: return
         prefs(ctx).edit().remove("trakt.tok.$w").apply()
-        File(ctx.filesDir, "upnext11-$w.json").delete()
+        File(ctx.filesDir, "upnext12-$w.json").delete()
         main.post { onChange?.invoke(w) }
     }
 
@@ -137,7 +137,7 @@ object Trakt {
     /** The person's next episodes as last fetched; fetches again in the background when stale. */
     fun upNext(ctx: Context, who: String): String {
         val w = safe(who) ?: return "[]"
-        val f = File(ctx.filesDir, "upnext11-$w.json")
+        val f = File(ctx.filesDir, "upnext12-$w.json")
         val stale = !f.exists() || System.currentTimeMillis() - f.lastModified() > FRESH_MS
         if (stale && token(ctx, w) != null && busy.add(w)) io.execute {
             try { fetch(ctx, w)?.let { f.writeText(it.toString()); main.post { onChange?.invoke(w) } } }
@@ -309,7 +309,12 @@ object Trakt {
             var pause = paused[id]?.takeIf { it.optString("paused_at") >= r.optString("last_watched_at") }
             val (pc, ps) = call(ctx, "GET", "/shows/$id/progress/watched?hidden=false&specials=false&extended=images", bearer = tok)
             if (pc != 200) continue
-            val next = after(JSONObject(ps)) ?: continue
+            val next = after(JSONObject(ps))
+            if (next == null) {   // finished: the page drops the TV's own card for it too
+                out.put(JSONObject().put("id", "t$id").put("title", show.optString("title")).put("finished", true)
+                    .put("last_played", r.optString("last_watched_at")))
+                continue
+            }
             val pe = pause?.optJSONObject("episode")
             if (pe == null || pe.optInt("season") != next.optInt("season") || pe.optInt("number") != next.optInt("number")) pause = null
             out.put(JSONObject()
