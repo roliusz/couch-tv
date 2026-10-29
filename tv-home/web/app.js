@@ -2512,6 +2512,20 @@
       root.classList.add("np-up");
       requestAnimationFrame(function () { requestAnimationFrame(function () { root.classList.remove("np-up"); }); });
     }
+    // the scene and the date drift while resting (idle.css): they glide back from where the drift
+    // had them, as the dock returns, instead of jumping back
+    [[document.getElementById("scenes"), "transform"], [$("date"), "translate"]].forEach(function (x) {
+      var el = x[0], prop = x[1];
+      if (!el) return;
+      var now = getComputedStyle(el)[prop];
+      el.style[prop] = now;
+      el.style.transition = prop === "transform" ? "filter 2s ease-in-out" : "none";
+      requestAnimationFrame(function () {
+        el.style.transition = prop + " 900ms cubic-bezier(0.4, 0, 0.2, 1)" + (prop === "transform" ? ", filter 2s ease-in-out" : "");
+        el.style[prop] = prop === "transform" ? "none" : "0px 0px";
+        setTimeout(function () { el.style.transition = ""; el.style[prop] = ""; }, 950);
+      });
+    });
     root.classList.remove("idle");
     idleSoon();
   try { if (TV && TV.vpn) document.documentElement.classList.toggle("vpn-on", !!TV.vpn()); } catch (e) {}
