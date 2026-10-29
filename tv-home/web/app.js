@@ -236,10 +236,24 @@
     });
   }
 
+  // fork: every message the home has for the household (opened, marked, could not, ...) appears in
+  // one glass bubble that drops in at the top and slides away by itself (toast.css)
+  var toastTimer = null;
+  function toast(text, ms) {
+    var el = $("toast");
+    clearTimeout(toastTimer);
+    if (!text) { el.classList.remove("on"); return; }
+    el.textContent = text;
+    el.classList.add("on");
+    if (window.tvAdapt) tvAdapt();
+    toastTimer = setTimeout(function () { el.classList.remove("on"); }, ms || 4000);
+  }
+  window.tvToast = toast;
   function status(text, sticky) {
     clearTimeout(statusTimer);
-    $("status").textContent = text || "";
-    if (text && !sticky) statusTimer = setTimeout(function () { status(data.bridge === false && !ALONE ? t("computer_quiet") : "", true); }, 6000);
+    $("status").textContent = "";
+    if (text) toast(text, sticky ? 9000 : 4500);
+    else if ($("toast").classList.contains("on")) toast("");   // the action finished: away it goes
   }
 
   function iconUrl(pkg) {
@@ -473,11 +487,7 @@
   var sleepEnds = null, picMode = null, picCanSet = false, picShown = false, picBusy = false, picModes = null;
   var qi = 0, menuI = 0, noteTimer = null, quickReady = false, quickEls = [];
 
-  function note(text) {
-    clearTimeout(noteTimer);
-    $("quick-note").textContent = text || "";
-    if (text) noteTimer = setTimeout(function () { $("quick-note").textContent = ""; }, 6000);
-  }
+  function note(text) { if (text) toast(text, 5000); }
   function minutesLeft() {
     if (!sleepEnds) return 0;
     var m = Math.ceil((sleepEnds - Date.now()) / 60000);
@@ -838,12 +848,7 @@
     $("hint").classList.toggle("on", !!text);
     document.documentElement.classList.toggle("hinting", !!text);
   }
-  function flash(text) {
-    clearTimeout(hintTimer);
-    hintFlash = text;
-    renderHint();
-    hintTimer = setTimeout(function () { hintFlash = ""; renderHint(); }, 4000);
-  }
+  function flash(text) { if (text) toast(text, 4000); }
   function holdApp() {
     var a = gridItems[g];
     if (!a || a.kind === "more") return false;

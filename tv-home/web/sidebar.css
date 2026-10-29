@@ -119,3 +119,6 @@ html.calm .side-panel, html.calm.siding .side-panel { transform: none; }
 
 /* the app picker for a Keep watching card (hold OK on it): each app's own icon */
 .side-row .sapp { width: 2.375rem; height: 2.375rem; flex: none; border-radius: 0.625rem; object-fit: cover; }
+
+/* the person's name on the tab: regular weight, not bold (it read heavier than everything near it) */
+.side-tab b { font-weight: 500; }
