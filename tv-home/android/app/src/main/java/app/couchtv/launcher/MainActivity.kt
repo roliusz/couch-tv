@@ -275,10 +275,14 @@ class MainActivity : Activity() {
         io.execute {
             var pick: JSONObject? = null
             for (i in 0 until players.length()) {
-                val id = players.optString(i)
+                // a player is its entity id, or { "id": ..., "name": what the card calls it }
+                val po = players.optJSONObject(i)
+                val id = po?.optString("id") ?: players.optString(i)
+                val label = po?.optString("name")?.takeIf { it.isNotEmpty() }
                 if (!Regex("media_player\\.[a-z0-9_]+").matches(id)) continue
                 val st = haGet(h, "/api/states/$id") ?: continue
                 val state = st.optString("state")
+                label?.let { st.put("label", it) }
                 if (state == "playing") { pick = st; break }
                 if (state == "paused" && pick == null) pick = st
             }
@@ -298,7 +302,7 @@ class MainActivity : Activity() {
                     .put("album", a.optString("media_album_name"))
                     .put("duration", a.optDouble("media_duration", 0.0))
                     .put("position", pos)
-                    .put("speaker", a.optString("friendly_name"))
+                    .put("speaker", pick.optString("label").ifEmpty { a.optString("friendly_name") })
                 pic?.let { out.put("picture", it) }
                 npEntity = pick.optString("entity_id")
             }
@@ -697,6 +701,9 @@ class MainActivity : Activity() {
 
         @JavascriptInterface
         fun traktUpNext(who: String): String = Trakt.upNext(this@MainActivity, who)
+        @JavascriptInterface
+        fun traktMark(who: String, show: String, season: Int, episode: Int) =
+            Trakt.markWatched(this@MainActivity, who, show.toLongOrNull() ?: 0L, season, episode)
     }
 
     // ---------------------------------------------------------------- the household's own photos

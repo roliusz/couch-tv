@@ -15,5 +15,7 @@ import config  # noqa: E402
 
 pub = config.public()
 pub["ask"] = {"enabled": False}
+# fork: the country, for where shows stream (Trakt's Watch now, TMDB): two letters, not a secret
+pub["country"] = config.COUNTRY
 text = json.dumps(pub, separators=(",", ":"))
 print(text if "--json" in sys.argv else base64.b64encode(text.encode()).decode())

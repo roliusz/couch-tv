@@ -88,6 +88,7 @@
     input: '<svg viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="13" rx="2.5"/><path d="M8 21h8M12 7.5v6M9.5 11l2.5 2.5 2.5-2.5"/></svg>',
     store: '<svg viewBox="0 0 24 24"><path d="M5 8h14l-1.2 11.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8z"/><path d="M9 10.5V7a3 3 0 0 1 6 0v3.5"/></svg>',
     check: '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    hide: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8 12h8"/></svg>',
     updown: '<svg viewBox="0 0 24 24"><path d="M8 9.5l4-4 4 4M8 14.5l4 4 4-4"/></svg>',
     sliders: '<svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>',
     chevron: '<svg viewBox="0 0 24 24"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg>',
@@ -688,7 +689,7 @@
 
   function renderShelf() {
     var track = $("shelf");
-    data.shows = (data.showsBy[who] || []).map(function (it) {
+    data.shows = (data.showsBy[who] || []).filter(shown).map(function (it) {
       var a = pickedApp(it);
       return a ? Object.assign({}, it, { app: a }) : it;
     });
@@ -987,12 +988,21 @@
     Array.prototype.forEach.call(document.querySelectorAll("#side-rows .focus, #np .focus"), function (el) { el.classList.remove("focus"); });
   }
 
+  var shelfFirst = 0;   // the first card in view
   function scrollShelf() {
     var track = $("shelf");
     var el = shelfEls[s];
-    if (!el) { track.style.transform = ""; return; }
+    if (!el) { track.style.transform = ""; shelfFirst = 0; return; }
     var step = el.offsetWidth + parseFloat(getComputedStyle(track).columnGap || 0);
-    var first = Math.max(0, Math.min(s - 2, shelfEls.length - 5));   // keep up to five in view
+    // fork: as Apple TV, focus walks across the cards in view and the row only slides once it
+    // reaches the second-to-last one in view (going right) or the second one (going left), so the
+    // next card is always showing
+    var fit = Math.max(2, Math.floor((track.parentNode.clientWidth + step - el.offsetWidth) / step));
+    var first = shelfFirst;
+    if (s > first + fit - 2) first = s - (fit - 2);
+    if (s < first + 1) first = s - 1;
+    first = Math.max(0, Math.min(first, shelfEls.length - fit));
+    shelfFirst = first;
     track.style.transform = "translateX(" + (-first * step) + "px)";
   }
 
@@ -1410,6 +1420,11 @@
     }
     if (SIDE.level === "app" && SIDE.show) {
       var cur = showPicks()[SIDE.show.key];
+      var sit = SIDE.show.it;
+      rows.push({ title: SIDE.show.title });
+      rows.push({ kind: "show-hide", icon: ICONS.hide, label: t("show_hide") });
+      if (canMark(sit)) rows.push({ kind: "show-mark", icon: ICONS.check,
+        label: t("show_mark", { ep: "S" + sit.season + ", E" + sit.episode }) });
       rows.push({ title: t("show_app", { title: SIDE.show.title }) });
       rows.push({ kind: "app-auto", icon: ICONS.check, label: t("show_app_auto"), check: !cur });
       pickApps().forEach(function (a) {
@@ -1485,11 +1500,26 @@
   function holdShow() {
     var it = data.shows[s];
     if (!it) return false;
-    SIDE.show = { key: showKey(it), title: it.title };
+    SIDE.show = { key: showKey(it), title: it.title, it: it };
     openSide();
-    var apps = pickApps(), cur = showPicks()[SIDE.show.key];
-    sideLevel("app", cur ? 1 + Math.max(0, apps.map(function (a) { return a.package; }).indexOf(cur)) : 0);
+    var apps = pickApps(), cur = showPicks()[SIDE.show.key], extra = canMark(it) ? 2 : 1;
+    sideLevel("app", cur ? extra + 1 + Math.max(0, apps.map(function (a) { return a.package; }).indexOf(cur)) : extra);
     return true;
+  }
+  // "Remove from Keep watching": the show stays off this TV's row until something newer of it
+  // turns up (another episode, or watching it again). Nothing is sent anywhere.
+  function cardSig(it) { return (it.season || 0) + ":" + (it.episode || 0) + ":" + (it.next ? "n" : "p"); }
+  function hiddenShows() { return kept("tvhome.hidden_shows") || {}; }
+  function hideShow(it) {
+    var h = hiddenShows(); h[showKey(it)] = cardSig(it); keep("tvhome.hidden_shows", h);
+    renderShelf(); paintFocus();
+  }
+  function shown(it) { var h = hiddenShows()[showKey(it)]; return !h || h !== cardSig(it); }
+  // "Mark S1, E6 as watched on Trakt": into the person's Trakt history; the card moves on
+  function canMark(it) { return !!(it && it.trakt && /^t\d+$/.test(it.id || "") && it.season != null && it.episode && TV && TV.traktMark); }
+  function markShow(it) {
+    try { TV.traktMark(who, it.id.slice(1), it.season, it.episode); } catch (e) {}
+    status(t("show_marked", { title: it.title }));
   }
   function pickApps() {   // the dock's apps, in the dock's order
     return gridItems.filter(function (a) { return a.package && a.kind !== "more" && a.kind !== "gear" && !a.store; });
@@ -1579,6 +1609,8 @@
     if (r.kind === "input") { closeSide(); openInputs(); return; }
     if (r.kind === "store") { closeSide(); openStore(); return; }
     if (r.kind === "ha") { haRun(r.id); return; }   // the sidebar stays open: run another, or go
+    if (r.kind === "show-hide") { hideShow(SIDE.show.it); closeSide(); return; }
+    if (r.kind === "show-mark") { markShow(SIDE.show.it); closeSide(); return; }
     if (r.kind === "app-pick" || r.kind === "app-auto") { setShowApp(r.kind === "app-pick" ? r.pkg : null); closeSide(); return; }
     if (r.kind === "home-settings") { closeSide(); openSettings(); return; }
     if (r.kind === "tv-settings") { closeSide(); openTvSettings(); return; }
@@ -1627,7 +1659,8 @@
     if (!npOn()) { el.innerHTML = ""; return; }
     var f = function (k) { return zone === "np" && NP_ITEMS[npi] === k ? " focus" : ""; };
     el.innerHTML = '<div class="np-top"><div class="np-info">' + npArt("np-art") +
-        '<span class="np-txt"><b>' + esc(NP.title) + "</b><small>" + esc(NP.artist) + "</small></span></div>" +
+        '<span class="np-txt">' + (NP.speaker ? '<i class="np-where">' + esc(t("playing_on", { name: NP.speaker })) + "</i>" : "") +
+          "<b>" + esc(NP.title) + "</b><small>" + esc(NP.artist) + "</small></span></div>" +
         '<span class="np-level" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></div>' +
       '<div class="np-time"><span class="np-el"></span><span class="np-bar"><i></i></span><span class="np-rem"></span></div>' +
       '<div class="np-ctl">' +

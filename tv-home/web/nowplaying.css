@@ -90,3 +90,8 @@
 html.calm .np { transition: visibility 0s linear 240ms; }
 html.calm .np .np-level i { animation: none !important; }
 html.calm .np:not(.on) { transform: none; }
+
+/* which speaker is playing (ha.json players' names), small and faint above the title */
+.np-where { display: block; font-style: normal; font-size: 1.125rem; line-height: 1.4; font-weight: 500; letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.45); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.np.on-light .np-where { color: rgba(0, 0, 0, 0.42); }

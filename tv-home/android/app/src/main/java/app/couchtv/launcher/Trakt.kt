@@ -99,12 +99,33 @@ object Trakt {
         }
     }
 
+    /** Record one episode as watched in the person's Trakt history (the household asked for it on
+     *  a Keep watching card), then fetch the list again so the card moves on. */
+    fun markWatched(ctx: Context, who: String, show: Long, season: Int, episode: Int) {
+        val w = safe(who) ?: return
+        if (show <= 0 || season < 0 || episode <= 0) return
+        io.execute {
+            val tok = access(ctx, w) ?: return@execute
+            val body = JSONObject().put("shows", JSONArray().put(JSONObject()
+                .put("ids", JSONObject().put("trakt", show))
+                .put("seasons", JSONArray().put(JSONObject().put("number", season)
+                    .put("episodes", JSONArray().put(JSONObject().put("number", episode)))))))
+            val (c, _) = call(ctx, "POST", "/sync/history", body, bearer = tok)
+            if (c in 200..299) {
+                val f = File(ctx.filesDir, "upnext21-$w.json")
+                f.delete()
+                fetch(ctx, w)?.let { f.writeText(it.toString()) }
+            }
+            main.post { onChange?.invoke(w) }
+        }
+    }
+
     fun cancel(who: String) { safe(who)?.let { linking.remove(it); main.post { onChange?.invoke(it) } } }
 
     fun unlink(ctx: Context, who: String) {
         val w = safe(who) ?: return
         prefs(ctx).edit().remove("trakt.tok.$w").apply()
-        File(ctx.filesDir, "upnext12-$w.json").delete()
+        File(ctx.filesDir, "upnext21-$w.json").delete()
         main.post { onChange?.invoke(w) }
     }
 
@@ -137,7 +158,7 @@ object Trakt {
     /** The person's next episodes as last fetched; fetches again in the background when stale. */
     fun upNext(ctx: Context, who: String): String {
         val w = safe(who) ?: return "[]"
-        val f = File(ctx.filesDir, "upnext12-$w.json")
+        val f = File(ctx.filesDir, "upnext21-$w.json")
         val stale = !f.exists() || System.currentTimeMillis() - f.lastModified() > FRESH_MS
         if (stale && token(ctx, w) != null && busy.add(w)) io.execute {
             try { fetch(ctx, w)?.let { f.writeText(it.toString()); main.post { onChange?.invoke(w) } } }
@@ -202,9 +223,24 @@ object Trakt {
      *  next_episode is the first never watched: nothing for a show being watched again (The Office
      *  all seen years ago, now on season 5 once more), and an old gap far behind where someone
      *  really is when they skipped an episode once. The last one watched was the finale: nothing. */
-    private fun after(pr: JSONObject): JSONObject? {
-        // the episode watched most recently, by when (each episode carries its last_watched_at),
-        // else Trakt's last_episode
+    /** How many times each episode of a show was watched, from the person's watch history. */
+    private fun plays(ctx: Context, show: Long, tok: String): Map<Pair<Int, Int>, Int> {
+        val out = HashMap<Pair<Int, Int>, Int>()
+        val (c, s) = call(ctx, "GET", "/sync/history/shows/$show?limit=2000", bearer = tok)
+        if (c != 200) return out
+        try {
+            val a = JSONArray(s)
+            for (i in 0 until a.length()) {
+                val e = a.getJSONObject(i).optJSONObject("episode") ?: continue
+                val k = e.optInt("season") to e.optInt("number")
+                out[k] = (out[k] ?: 0) + 1
+            }
+        } catch (e: Exception) {}
+        return out
+    }
+
+    private fun after(pr: JSONObject, plays: Map<Pair<Int, Int>, Int>): JSONObject? {
+        // every aired episode in order, and when each was last watched (Trakt's progress)
         val order = ArrayList<Pair<Int, Int>>()
         var newest = ""; var latest: Pair<Int, Int>? = null
         pr.optJSONArray("seasons")?.let { ss ->
@@ -220,14 +256,24 @@ object Trakt {
                 }
             }
         }
-        val last = latest ?: pr.optJSONObject("last_episode")?.let { it.optInt("season") to it.optInt("number") }
-            ?: return pr.optJSONObject("next_episode")
+        val last = latest ?: return pr.optJSONObject("next_episode")
         val at = order.indexOf(last)
         if (at < 0) return pr.optJSONObject("next_episode")
-        if (at + 1 >= order.size) return null
-        val (sn, en) = order[at + 1]
-        pr.optJSONObject("next_episode")?.let { if (it.optInt("season") == sn && it.optInt("number") == en) return it }
-        return JSONObject().put("season", sn).put("number", en)
+        // The episode watched last decides. Watched more than once, it is a rewatch (The Office on
+        // its second time through): the next one is simply the one after it. Watched once, the next
+        // is the first later one never watched, and none means finished: marking a whole series
+        // watched dates its episodes at their release, older than the ones really watched, so the
+        // "latest" can be mid-series while every episode is in fact watched.
+        val p = plays[last] ?: 1
+        val rewatch = p > 1
+        for (i in at + 1 until order.size) {
+            val k = order[i]
+            if (rewatch || (plays[k] ?: 0) == 0) {
+                pr.optJSONObject("next_episode")?.let { if (it.optInt("season") == k.first && it.optInt("number") == k.second) return it }
+                return JSONObject().put("season", k.first).put("number", k.second)
+            }
+        }
+        return null
     }
 
     /** Where the show streams in the household's country, from TMDB (JustWatch's data): the
@@ -262,6 +308,20 @@ object Trakt {
         } catch (e: Exception) {
         } finally { c.disconnect() }
         return out
+    }
+
+    /** Whether an episode has aired (Trakt's first_aired is in the past); asked once per episode. */
+    private val airDates = HashMap<String, Long>()
+    private fun aired(ctx: Context, show: Long, season: Int, episode: Int, tok: String): Boolean {
+        val k = "$show/$season/$episode"
+        val at = airDates[k] ?: run {
+            val (c, s) = call(ctx, "GET", "/shows/$show/seasons/$season/episodes/$episode?extended=full", bearer = tok)
+            if (c != 200) return true   // cannot tell: show it
+            val t = try { JSONObject(s).optString("first_aired").takeIf { it.isNotEmpty() && it != "null" }
+                ?.let { java.time.Instant.parse(it).toEpochMilli() } ?: Long.MAX_VALUE } catch (e: Exception) { 0L }
+            airDates[k] = t; t
+        }
+        return at <= System.currentTimeMillis()
     }
 
     private fun fetch(ctx: Context, who: String): JSONArray? {
@@ -309,7 +369,14 @@ object Trakt {
             var pause = paused[id]?.takeIf { it.optString("paused_at") >= r.optString("last_watched_at") }
             val (pc, ps) = call(ctx, "GET", "/shows/$id/progress/watched?hidden=false&specials=false&extended=images", bearer = tok)
             if (pc != 200) continue
-            val next = after(JSONObject(ps))
+            val next = after(JSONObject(ps), plays(ctx, id, tok))
+            // not out yet (Youth's next episode airs next week): not "next" until it airs
+            if (next != null && !aired(ctx, id, next.optInt("season"), next.optInt("number"), tok)) {
+                // the TV's own card for it (HBO Max's bare record) waits too
+                out.put(JSONObject().put("id", "t$id").put("title", show.optString("title")).put("finished", true)
+                    .put("last_played", r.optString("last_watched_at")))
+                continue
+            }
             if (next == null) {   // finished: the page drops the TV's own card for it too
                 out.put(JSONObject().put("id", "t$id").put("title", show.optString("title")).put("finished", true)
                     .put("last_played", r.optString("last_watched_at")))
