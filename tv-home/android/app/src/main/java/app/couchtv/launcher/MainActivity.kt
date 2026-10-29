@@ -686,6 +686,14 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun vpn(): Boolean = vpnOn
 
+        // fork: the sidebar's Ambient mode: start the screensaver (Google ambient mode) now, as the
+        // TV would after its idle time
+        @JavascriptInterface
+        fun startAmbient(): Boolean = try {
+            startActivity(Intent(Intent.ACTION_MAIN).setComponent(android.content.ComponentName("com.android.systemui", "com.android.systemui.Somnambulator"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true
+        } catch (e: Exception) { false }
+
         // fork: Trakt next episodes (Trakt.kt). Tokens stay in the launcher.
         @JavascriptInterface
         fun traktState(who: String): String = Trakt.state(this@MainActivity, who)

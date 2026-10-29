@@ -89,6 +89,7 @@
     store: '<svg viewBox="0 0 24 24"><path d="M5 8h14l-1.2 11.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8z"/><path d="M9 10.5V7a3 3 0 0 1 6 0v3.5"/></svg>',
     check: '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
     hide: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8 12h8"/></svg>',
+    ambient: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 20h8M7 13l3-3 2 2 3-3 2 2"/></svg>',
     updown: '<svg viewBox="0 0 24 24"><path d="M8 9.5l4-4 4 4M8 14.5l4 4 4-4"/></svg>',
     sliders: '<svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>',
     chevron: '<svg viewBox="0 0 24 24"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg>',
@@ -1449,6 +1450,7 @@
       rows.push({ kind: "who", label: cur.name, avatar: avatarHTML(cur), value: sideTime, head: true });
     } else rows.push({ head: true, label: t("settings"), value: sideTime });
     rows.push({ kind: "store", icon: ICONS.store, label: t("store") });   // Google Play, as the TV app's Store
+    if (TV && TV.startAmbient || MOCK) rows.push({ kind: "ambient", icon: ICONS.ambient, label: t("ambient") });
     quickVisible().forEach(function (q) {
       if (q === "sleep") {
         var left = minutesLeft();
@@ -1613,6 +1615,7 @@
     if (r.kind === "picture") { togglePicture(); renderSide(); return; }
     if (r.kind === "input") { closeSide(); openInputs(); return; }
     if (r.kind === "store") { closeSide(); openStore(); return; }
+    if (r.kind === "ambient") { closeSide(); var ok = false; try { ok = !!(TV && TV.startAmbient()); } catch (e) {} if (!ok) toast(t("ambient_none")); return; }
     if (r.kind === "ha") { haRun(r.id); return; }   // the sidebar stays open: run another, or go
     if (r.kind === "show-hide") { hideShow(SIDE.show.it); closeSide(); return; }
     if (r.kind === "show-mark") { markShow(SIDE.show.it); closeSide(); return; }
