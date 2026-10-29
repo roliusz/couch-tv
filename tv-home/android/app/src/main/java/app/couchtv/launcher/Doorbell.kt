@@ -28,7 +28,9 @@ import java.util.concurrent.Executors
  * helper, camera, name). While the TV is on, the launcher looks at that helper every few seconds;
  * when it is on, a card with the door camera slides in at the top right over whatever is playing,
  * and goes when the helper goes off. The camera runs on a battery, so it shows snapshots (every two
- * seconds), as the dashboards do, not a live stream. Any button on the remote hides it (that
+ * seconds) straight away, then the live picture over it once Home Assistant has it going: a Ring
+ * "Live view" camera only streams (WebRTC, as Home Assistant's own card plays it) and has no
+ * stills of its own, so the live view is what fills the card. Any button on the remote hides it (that
  * press only hides it; the next one goes to what is playing again), and once hidden it stays
  * hidden for that ring.
  *
@@ -42,6 +44,7 @@ object Doorbell {
     private var app: Context? = null
     private var card: View? = null
     private var picture: ImageView? = null
+    private var live: android.webkit.WebView? = null
     private var started = false
     private var dismissed = false   // hidden with the remote: not again until the helper goes off
 
@@ -119,6 +122,8 @@ object Doorbell {
         }
         val img = ImageView(ctx).apply { scaleType = ImageView.ScaleType.CENTER_CROP; setBackgroundColor(Color.BLACK) }
         frame.addView(img, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        val video = ha(ctx)?.let { liveView(ctx, it, b.getString("camera")) }
+        if (video != null) frame.addView(video, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         // the name on a soft dark band along the bottom, as the Keep watching cards
         val band = View(ctx).apply {
             background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(Color.TRANSPARENT, Color.parseColor("#99000000")))
@@ -147,7 +152,7 @@ object Doorbell {
         }
         try { wm.addView(frame, lp) } catch (e: Exception) { return }
         frame.requestFocus()
-        card = frame; picture = img
+        card = frame; picture = img; live = video
         frame.alpha = 0f; frame.translationY = -24 * dp; frame.scaleX = 0.96f; frame.scaleY = 0.96f
         frame.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f).setDuration(420)
             .setInterpolator(android.view.animation.PathInterpolator(0.2f, 0.8f, 0.2f, 1f)).start()
@@ -158,9 +163,62 @@ object Doorbell {
         val v = card ?: return
         card = null; picture = null
         main.removeCallbacks(refresh)
+        // ends the camera's live session too (the page's connection closes with it)
+        live?.let { w -> main.postDelayed({ try { w.destroy() } catch (e: Exception) {} }, 400) }
+        live = null
         val ctx = app ?: return
         v.animate().alpha(0f).translationY(-16 * ctx.resources.displayMetrics.density).setDuration(300).withEndAction {
             try { (ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager).removeView(v) } catch (e: Exception) {}
         }.start()
     }
+
+    /** The live picture, as Home Assistant's own card plays it: a small page asks Home Assistant
+     *  (its websocket) for a WebRTC session with the camera and plays it, muted. It stays clear
+     *  until the video is actually playing, so the snapshot (or black) shows until then. */
+    private fun liveView(ctx: Context, h: JSONObject, camera: String): android.webkit.WebView? = try {
+        android.webkit.WebView(ctx).apply {
+            setBackgroundColor(Color.TRANSPARENT)
+            isFocusable = false; isFocusableInTouchMode = false
+            settings.javaScriptEnabled = true
+            settings.mediaPlaybackRequiresUserGesture = false
+            webChromeClient = object : android.webkit.WebChromeClient() {
+                override fun onConsoleMessage(m: android.webkit.ConsoleMessage): Boolean {
+                    android.util.Log.i("Doorbell", m.message()); return true
+                }
+            }
+            val base = h.getString("url").trimEnd('/')
+            val cfg = JSONObject().put("ws", base.replaceFirst("http", "ws") + "/api/websocket")
+                .put("token", h.optString("token")).put("camera", camera)
+            loadDataWithBaseURL(base + "/", LIVE_PAGE.replace("/*CFG*/null", cfg.toString()), "text/html", "utf-8", null)
+        }
+    } catch (e: Exception) { null }   // no WebView on this TV: snapshots only
+
+    private const val LIVE_PAGE = """<!doctype html><html><head><meta name="viewport" content="width=device-width">
+<style>html,body{margin:0;height:100%;background:transparent;overflow:hidden}
+video{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .4s}video.on{opacity:1}</style></head>
+<body><video id="v" autoplay muted playsinline></video><script>
+var C=/*CFG*/null, v=document.getElementById("v"), id=1, pc=null, sid=null, early=[];
+v.addEventListener("playing",function(){v.className="on"});
+var ws=new WebSocket(C.ws);
+function send(m){m.id=id++;ws.send(JSON.stringify(m));return m.id}
+ws.onmessage=function(e){var m=JSON.parse(e.data);
+ if(m.type==="auth_invalid"||(m.type==="result"&&!m.success))console.log("live: "+JSON.stringify(m.error||m.type));
+ if(m.type==="event"&&m.event&&m.event.type==="error")console.log("live: "+JSON.stringify(m.event));
+ if(m.type==="auth_required"){ws.send(JSON.stringify({type:"auth",access_token:C.token}));return}
+ if(m.type==="auth_ok"){cfgId=send({type:"camera/webrtc/get_client_config",entity_id:C.camera});return}
+ if(m.type==="result"&&m.id===cfgId){start(m.success&&m.result&&m.result.configuration||{});return}
+ if(m.type==="event"&&m.event){var ev=m.event;
+  if(ev.type==="session"){sid=ev.session_id;early.forEach(cand);early=[]}
+  else if(ev.type==="answer"){pc.setRemoteDescription({type:"answer",sdp:ev.answer})}
+  else if(ev.type==="candidate"&&ev.candidate){pc.addIceCandidate({candidate:ev.candidate.candidate,sdpMLineIndex:ev.candidate.sdp_m_line_index||0}).catch(function(){})}}
+};
+var cfgId=0;
+function cand(c){send({type:"camera/webrtc/candidate",entity_id:C.camera,session_id:sid,candidate:{candidate:c.candidate,sdp_m_line_index:c.sdpMLineIndex}})}
+function start(conf){pc=new RTCPeerConnection(conf);
+ pc.addTransceiver("video",{direction:"recvonly"});pc.addTransceiver("audio",{direction:"recvonly"});
+ pc.ontrack=function(e){if(!v.srcObject)v.srcObject=e.streams[0]||new MediaStream([e.track])};
+ pc.onicecandidate=function(e){if(!e.candidate)return;if(sid)cand(e.candidate);else early.push(e.candidate)};
+ pc.createOffer().then(function(o){return pc.setLocalDescription(o)}).then(function(){
+  send({type:"camera/webrtc/offer",entity_id:C.camera,offer:pc.localDescription.sdp})})}
+</script></body></html>"""
 }
