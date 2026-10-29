@@ -1148,7 +1148,7 @@
         pi = Math.max(0, Math.min(PEOPLE.length - 1, pi + dx));
       } else if (dy > 0) zone = cards.length ? "shelf" : "grid";
     } else if (zone === "shelf") {
-      if (dx < 0 && s === 0) { openSide(); return; }
+      if (dx < 0 && s === 0) return;   // fork: Left at the start stays put; Back or the person tab opens the sidebar
       if (dy < 0) { upTop(shelfEls[s]); return; }   // up from the cards: the person tab or Now Playing
       if (dx) s = Math.max(0, Math.min(shelfEls.length - 1, s + dx));
       else if (dy > 0 && gridEls.length) {
@@ -1159,7 +1159,7 @@
       }
     } else {
       var row = Math.floor(g / GRID_COLS), lastRow = Math.floor((gridEls.length - 1) / GRID_COLS);
-      if (dx < 0 && g % GRID_COLS === 0) { openSide(); return; }
+      if (dx < 0 && g % GRID_COLS === 0) return;
       if (dx) {
         var nx = g + dx;
         if (nx >= 0 && nx < gridEls.length && Math.floor(nx / GRID_COLS) === row) g = nx;
@@ -1568,7 +1568,7 @@
   }
   function tabMove(dx, dy) {
     if (dy > 0) fromTab();
-    else if (dx < 0) openSide();
+    // (Left on the person tab does nothing: OK on it, or Back, opens the sidebar)
     else if (dx > 0 && npOn()) toNp(tabFrom);
   }
   // Up from the top row: the corner over it. The person tab is top left, Now Playing top right.

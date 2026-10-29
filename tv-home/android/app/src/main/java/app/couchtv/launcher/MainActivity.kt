@@ -71,6 +71,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Doorbell.start(this)   // fork: the door camera over whatever is on, when someone rings
+        NowOverlay.start(this)   // fork: the music card over ambient mode
         // Lets a computer inspect the page over ADB (chrome://inspect). Only reachable with ADB access.
         WebView.setWebContentsDebuggingEnabled(true)
         root = FrameLayout(this).apply { setBackgroundColor(GROUND) }
