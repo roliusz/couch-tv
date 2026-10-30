@@ -746,7 +746,7 @@
     var meta = it.premiere ? (it.episode === 1 ? "S" + it.season + " \u00b7 " : ep + " \u00b7 ") + premiereDay(it.first_aired)
       : (it.next ? t("up_next") + " \u00b7 " : "") + ep + (left ? " \u00b7 " + (left >= 60 ? Math.floor(left / 60) + "h " + (left % 60) + "m" : left + "m") : "");
     return '<div class="tile ncard' + (it.premiere ? " prem" : "") + '">' +
-      (art ? '<img class="nart" src="' + esc(art) + '" alt="" decoding="async">' : '<span class="nart none">' + esc(it.title) + "</span>") +
+      (art ? '<img class="nart" src="' + esc(art) + '" alt="" decoding="async" onerror="tvNoArt(this)">' : '<span class="nart none">' + esc(it.title) + "</span>") +
       (pkg && iconUrl(pkg) ? '<img class="napp" src="' + esc(iconUrl(pkg)) + '" alt="" onerror="this.remove()">' : "") +
       '<div class="nband"><b>' + esc(it.title) + '</b><div class="nmeta">' +
         (it.premiere ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2.5a1 1 0 0 1 1 1V5h8V3.5a1 1 0 1 1 2 0V5h1a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3h1V3.5a1 1 0 0 1 1-1zM4 10v9a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-9z"/></svg>'
@@ -754,6 +754,13 @@
         (it.progress ? '<span class="nbar"><i style="width:' + Math.max(4, Math.round(it.progress * 100)) + '%"></i></span>' : "") +
         "<span>" + esc(meta) + "</span></div></div></div>";
   }
+  // a picture that will not load: the card's title on its own instead of a dark, empty card
+  window.tvNoArt = function (im) {
+    var c = im.closest(".ncard"), t = c && c.querySelector(".nband b");
+    var sp = document.createElement("span");
+    sp.className = "nart none"; sp.textContent = t ? t.textContent : "";
+    im.replaceWith(sp);
+  };
   // ---- fork: Upcoming premieres, first in the Keep watching row: the season and series premieres
   // coming up for the person's Trakt shows (Trakt.kt), one card that turns to the next one every 30
   // seconds, soonest first. Only while the person has premieres coming; OK opens the show's app.

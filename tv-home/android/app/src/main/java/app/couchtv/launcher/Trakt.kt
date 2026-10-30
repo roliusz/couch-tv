@@ -175,7 +175,9 @@ object Trakt {
     fun premieres(ctx: Context, who: String): String {
         val w = safe(who) ?: return "[]"
         val f = File(ctx.filesDir, "premieres-$w.json")
-        val stale = !f.exists() || System.currentTimeMillis() - f.lastModified() > PREMIERES_MS
+        // a list still missing a picture (Trakt slow to answer) is asked for again sooner
+        val keep = if (f.exists() && f.readText().contains("\"art\":null")) FRESH_MS else PREMIERES_MS
+        val stale = !f.exists() || System.currentTimeMillis() - f.lastModified() > keep
         if (stale && token(ctx, w) != null && busy.add("p:$w")) io.execute {
             try { fetchPremieres(ctx, w)?.let { f.writeText(it.toString()); main.post { onChange?.invoke(w) } } }
             finally { busy.remove("p:$w") }
@@ -204,7 +206,7 @@ object Trakt {
                 .put("first_aired", e.optString("first_aired"))
                 .put("network", show.optString("network"))
                 .put("streams", streamsHere(ctx, show.optJSONObject("ids")?.optLong("tmdb") ?: 0L))
-                .put("art", art(ctx, id, show) ?: JSONObject.NULL))
+                .put("art", art(ctx, id, show) ?: picture(ep) ?: JSONObject.NULL))
         }
         return out
     }
