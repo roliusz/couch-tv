@@ -704,7 +704,9 @@
       var a = pickedApp(it);
       return a ? Object.assign({}, it, { app: a }) : it;
     });
-    var anyone = PEOPLE.some(function (p) { return (data.showsBy[p.id] || []).length; });
+    var pc = premiereCard();
+    if (pc) data.shows.unshift(pc);
+    var anyone = !!pc || PEOPLE.some(function (p) { return (data.showsBy[p.id] || []).length; });
     // nobody has anything on the go: no empty box, the photo has the space
     $("shelf-section").classList.toggle("empty", !anyone);
     $("people").classList.toggle("empty", !anyone);
@@ -712,6 +714,7 @@
     if (!data.shows.length) {
       var name = PEOPLE[whoIndex()].name;
       track.innerHTML = '<p class="shelf-none">' + esc(peopleCount() < 2 ? t("nothing_yet") : t("nothing_for", { name: name })) + "</p>";
+      $("shelf-section").classList.remove("premiering");
       shelfEls = [];
       return;
     }
@@ -719,20 +722,15 @@
       // fork: Apple TV's Continue Watching cards, five in view and the rest scrolled to on the right
       // (scrollShelf): the artwork fills the card, the service's icon top right, and a blurred band
       // at the bottom with the title, a play symbol, how far in, and the episode (keepwatching.css)
-      track.innerHTML = data.shows.map(function (it) {
-        var art = it.backdrop || it.poster, pkg = it.app && it.app.package;
-        var ep = it.season && it.episode ? "S" + it.season + ", E" + it.episode : (it.app ? it.app.name : "");
-        var left = it.remaining_min || (it.runtime_min && it.progress ? Math.round(it.runtime_min * (1 - it.progress)) : 0);
-        var meta = (it.next ? t("up_next") + " \u00b7 " : "") + ep + (left ? " \u00b7 " + (left >= 60 ? Math.floor(left / 60) + "h " + (left % 60) + "m" : left + "m") : "");
-        return '<div class="tile ncard">' +
-          (art ? '<img class="nart" src="' + esc(art) + '" alt="" decoding="async">' : '<span class="nart none">' + esc(it.title) + "</span>") +
-          (pkg && iconUrl(pkg) ? '<img class="napp" src="' + esc(iconUrl(pkg)) + '" alt="" onerror="this.remove()">' : "") +
-          '<div class="nband"><b>' + esc(it.title) + '</b><div class="nmeta">' +
-            '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.8v14.4a1 1 0 0 0 1.5.86l11.6-7.2a1 1 0 0 0 0-1.72L8.5 3.94A1 1 0 0 0 7 4.8z"/></svg>' +
-            (it.progress ? '<span class="nbar"><i style="width:' + Math.max(4, Math.round(it.progress * 100)) + '%"></i></span>' : "") +
-            "<span>" + esc(meta) + "</span></div></div></div>";
-      }).join("");
-      shelfEls = Array.prototype.slice.call(track.children);
+      var prem = data.shows[0] && data.shows[0].premiere;
+      track.innerHTML = data.shows.map(cardHTML).join("") +
+        // fork: with a premiere first, each part of the row carries its own heading, moving with it
+        (prem ? '<span class="shelf-label">' + esc(t(premieresNow().length > 1 ? "upcoming_premieres" : "upcoming_premiere")) + "</span>" +
+          (data.shows.length > 1 ? '<span class="shelf-label kw">' + esc(t("keep_watching")) + "</span>" : "") : "");
+      $("shelf-section").classList.toggle("premiering", !!prem);
+      shelfEls = Array.prototype.slice.call(track.querySelectorAll(".ncard"));
+      var kw = track.querySelector(".shelf-label.kw");
+      if (kw && shelfEls[1]) kw.style.left = shelfEls[1].offsetLeft + "px";
       shelfEls.forEach(function (el) {
         var im = el.querySelector("img.nart");
         if (!im) return;
@@ -741,6 +739,75 @@
       return;
     }
   }
+  function cardHTML(it) {
+    var art = it.backdrop || it.poster, pkg = it.app && it.app.package;
+    var ep = it.season && it.episode ? "S" + it.season + ", E" + it.episode : (it.app ? it.app.name : "");
+    var left = it.remaining_min || (it.runtime_min && it.progress ? Math.round(it.runtime_min * (1 - it.progress)) : 0);
+    var meta = it.premiere ? (it.episode === 1 ? "S" + it.season + " \u00b7 " : ep + " \u00b7 ") + premiereDay(it.first_aired)
+      : (it.next ? t("up_next") + " \u00b7 " : "") + ep + (left ? " \u00b7 " + (left >= 60 ? Math.floor(left / 60) + "h " + (left % 60) + "m" : left + "m") : "");
+    return '<div class="tile ncard' + (it.premiere ? " prem" : "") + '">' +
+      (art ? '<img class="nart" src="' + esc(art) + '" alt="" decoding="async">' : '<span class="nart none">' + esc(it.title) + "</span>") +
+      (pkg && iconUrl(pkg) ? '<img class="napp" src="' + esc(iconUrl(pkg)) + '" alt="" onerror="this.remove()">' : "") +
+      '<div class="nband"><b>' + esc(it.title) + '</b><div class="nmeta">' +
+        (it.premiere ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2.5a1 1 0 0 1 1 1V5h8V3.5a1 1 0 1 1 2 0V5h1a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3h1V3.5a1 1 0 0 1 1-1zM4 10v9a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-9z"/></svg>'
+          : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.8v14.4a1 1 0 0 0 1.5.86l11.6-7.2a1 1 0 0 0 0-1.72L8.5 3.94A1 1 0 0 0 7 4.8z"/></svg>') +
+        (it.progress ? '<span class="nbar"><i style="width:' + Math.max(4, Math.round(it.progress * 100)) + '%"></i></span>' : "") +
+        "<span>" + esc(meta) + "</span></div></div></div>";
+  }
+  // ---- fork: Upcoming premieres, first in the Keep watching row: the season and series premieres
+  // coming up for the person's Trakt shows (Trakt.kt), one card that turns to the next one every 30
+  // seconds, soonest first. Only while the person has premieres coming; OK opens the show's app.
+  var PREM = { i: 0, timer: null };
+  var MOCK_PREM = [
+    { id: "t2", title: "Severance", season: 3, episode: 1, first_aired: new Date(Date.now() + 2 * 86400000).toISOString(), network: "Apple TV+", art: null },
+    { id: "t3", title: "The Bear", season: 5, episode: 1, first_aired: new Date(Date.now() + 9 * 86400000).toISOString(), network: "Disney+", art: null }];
+  function premieresNow() {
+    var list = [];
+    if (TV && TV.traktPremieres) { try { list = JSON.parse(TV.traktPremieres(who)) || []; } catch (e) { list = []; } }
+    else if (MOCK) list = MOCK_PREM;
+    return list.filter(function (e) { return (Date.parse(e.first_aired) || 0) > Date.now() - 86400000; }).map(function (e) {
+      return { id: e.id, title: e.title, season: e.season, episode: e.episode, first_aired: e.first_aired, premiere: true, source: "tv",
+        app: (e.streams || []).map(appForNetwork).filter(Boolean)[0] || appForNetwork(e.network) || null, backdrop: e.art || null };
+    });
+  }
+  function premiereDay(iso) {
+    var d = new Date(iso), today = new Date(); today.setHours(0, 0, 0, 0);
+    var days = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - today) / 86400000);
+    if (days <= 0) return t("prem_today");
+    if (days === 1) return t("prem_tomorrow");
+    var loc = (window.I18N && I18N.locale && I18N.locale()) || undefined;
+    try { return d.toLocaleDateString(loc, days < 7 ? { weekday: "long" } : { weekday: "short", day: "numeric", month: "short" }); }
+    catch (e) { return d.toDateString(); }
+  }
+  function premiereCard() {
+    var list = premieresNow().map(function (it) { var a = pickedApp(it); return a ? Object.assign({}, it, { app: a }) : it; });
+    clearInterval(PREM.timer); PREM.timer = null;
+    if (!list.length) return null;
+    PREM.i %= list.length;
+    if (list.length > 1) PREM.timer = setInterval(turnPremiere, 30000);
+    return list[PREM.i];
+  }
+  // the next premiere, swapped into the card where it stands (focus, springs and the row stay put)
+  function turnPremiere() {
+    var list = premieresNow(), el = shelfEls[0];
+    if (list.length < 2 || !el || !data.shows[0] || !data.shows[0].premiere) return;
+    PREM.i = (PREM.i + 1) % list.length;
+    var it = list[PREM.i], a = pickedApp(it);
+    if (a) it = Object.assign({}, it, { app: a });
+    var tmp = document.createElement("div");
+    tmp.innerHTML = cardHTML(it);
+    el.classList.add("turning");
+    setTimeout(function () {
+      el.innerHTML = tmp.firstChild.innerHTML;
+      data.shows[0] = it;
+      var im = el.querySelector("img.nart");
+      var show = function () { el.classList.remove("turning"); if (im) bakeBlur(el, im); };
+      if (im && !(im.complete && im.naturalWidth)) { im.addEventListener("load", show, { once: true }); im.addEventListener("error", show, { once: true }); }
+      else show();
+      if (zone === "shelf" && s === 0) topShelf();
+    }, 350);
+  }
+
   // fork: the card's blurred band, drawn once: the artwork at an eighth of the card's size (shrinking
   // it is the blur; stretched back it is soft), faded in from the middle down (keepwatching.css)
   function bakeBlur(card, im) {
@@ -1243,6 +1310,8 @@
     if (zone === "shelf") {
       var it = data.shows[s];
       if (!it) return;
+      // a premiere with no app on this TV to open: when it starts, said again
+      if (it.premiere && !(TV && it.app)) { toast(t("prem_on", { title: it.title, day: premiereDay(it.first_aired) })); return; }
       var resume = function () {
         if (it.source === "tv") {   // fork: recorded on this TV; the app resumes the episode itself
           if (!(TV && it.app && TV.launch(it.app.package)) && window.tvMotion) tvMotion.abort();

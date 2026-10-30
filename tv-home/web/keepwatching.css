@@ -65,3 +65,17 @@
 .s-dawn .gclock { top: 9.0625rem; }
 .scene-dawn .date { top: 5.75rem; }
 .s-fog .gclock { top: 11rem; font-size: 22.875rem; }
+
+/* Upcoming premieres (app.js, premiereCard): the first card of the row, with each part of the row
+   under its own heading. The headings sit in the row itself, so they slide with the cards; the
+   row's usual heading keeps its space but steps aside. The card turns to the next premiere with a
+   short fade. */
+.theme-night .shelf.premiering .shelf-head h2 { visibility: hidden; }
+.theme-night .shelf-track { position: relative; }
+.theme-night .shelf-label {
+  position: absolute; left: 0; bottom: calc(100% + 1rem); white-space: nowrap;
+  font-size: 1.5625rem; line-height: 2.25rem; font-weight: 600; color: rgba(255, 255, 255, 0.78);
+  letter-spacing: -0.01em; text-shadow: 0 0.125rem 1rem rgba(0, 0, 0, 0.4);
+}
+.ncard.prem > * { transition: opacity 350ms ease-out; }
+.ncard.prem.turning > * { opacity: 0; }

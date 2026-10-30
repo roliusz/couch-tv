@@ -25,6 +25,7 @@ object Trakt {
     private const val SHOWS = 12                 // most recently watched shows looked at
     private const val FRESH_MS = 10 * 60_000L
     private const val STALE_MS = 14 * 86_400_000L      // only the last two weeks: older is not "keep watching"
+    private const val PREMIERES_MS = 6 * 3_600_000L
     private const val CREDITS = 92.0                   // percent: this far in, only the credits are left
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
@@ -126,6 +127,7 @@ object Trakt {
         val w = safe(who) ?: return
         prefs(ctx).edit().remove("trakt.tok.$w").apply()
         File(ctx.filesDir, "upnext21-$w.json").delete()
+        File(ctx.filesDir, "premieres-$w.json").delete()
         main.post { onChange?.invoke(w) }
     }
 
@@ -165,6 +167,46 @@ object Trakt {
             finally { busy.remove(w) }
         }
         return if (token(ctx, w) != null && f.exists()) f.readText() else "[]"
+    }
+
+    /** Season and series premieres coming up for the shows the person follows on Trakt (watched,
+     *  collected or on the watchlist), soonest first, one per show: kept for six hours, since the
+     *  calendar rarely changes. Fetched again in the background when stale. */
+    fun premieres(ctx: Context, who: String): String {
+        val w = safe(who) ?: return "[]"
+        val f = File(ctx.filesDir, "premieres-$w.json")
+        val stale = !f.exists() || System.currentTimeMillis() - f.lastModified() > PREMIERES_MS
+        if (stale && token(ctx, w) != null && busy.add("p:$w")) io.execute {
+            try { fetchPremieres(ctx, w)?.let { f.writeText(it.toString()); main.post { onChange?.invoke(w) } } }
+            finally { busy.remove("p:$w") }
+        }
+        return if (token(ctx, w) != null && f.exists()) f.readText() else "[]"
+    }
+
+    private fun fetchPremieres(ctx: Context, who: String): JSONArray? {
+        val tok = access(ctx, who) ?: return null
+        val today = java.time.LocalDate.now().toString()
+        val (c, s) = call(ctx, "GET", "/calendars/my/shows/premieres/$today/33?extended=full,images", bearer = tok)
+        if (c != 200) return null
+        val now = System.currentTimeMillis()
+        val seen = HashSet<Long>()
+        val out = JSONArray()
+        val a = JSONArray(s)
+        (0 until a.length()).map { a.getJSONObject(it) }.sortedBy { it.optString("first_aired") }.forEach { e ->
+            val show = e.optJSONObject("show") ?: return@forEach
+            val ep = e.optJSONObject("episode") ?: return@forEach
+            val id = show.optJSONObject("ids")?.optLong("trakt") ?: return@forEach
+            val at = try { java.time.Instant.parse(e.optString("first_aired")).toEpochMilli() } catch (x: Exception) { return@forEach }
+            if (at < now - 86_400_000L || !seen.add(id)) return@forEach   // aired already (today's still counts)
+            out.put(JSONObject()
+                .put("id", "t$id").put("title", show.optString("title"))
+                .put("season", ep.optInt("season")).put("episode", ep.optInt("number"))
+                .put("first_aired", e.optString("first_aired"))
+                .put("network", show.optString("network"))
+                .put("streams", streamsHere(ctx, show.optJSONObject("ids")?.optLong("tmdb") ?: 0L))
+                .put("art", art(ctx, id, show) ?: JSONObject.NULL))
+        }
+        return out
     }
 
     private fun picture(o: JSONObject?): String? {

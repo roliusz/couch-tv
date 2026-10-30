@@ -711,6 +711,8 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun traktUpNext(who: String): String = Trakt.upNext(this@MainActivity, who)
         @JavascriptInterface
+        fun traktPremieres(who: String): String = Trakt.premieres(this@MainActivity, who)
+        @JavascriptInterface
         fun traktMark(who: String, show: String, season: Int, episode: Int) =
             Trakt.markWatched(this@MainActivity, who, show.toLongOrNull() ?: 0L, season, episode)
     }
