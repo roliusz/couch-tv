@@ -358,14 +358,16 @@ object Trakt {
     private val airDates = HashMap<String, Long>()
     private fun aired(ctx: Context, show: Long, season: Int, episode: Int, tok: String): Boolean {
         val k = "$show/$season/$episode"
-        val at = airDates[k] ?: run {
-            val (c, s) = call(ctx, "GET", "/shows/$show/seasons/$season/episodes/$episode?extended=full", bearer = tok)
-            if (c != 200) return true   // cannot tell: show it
-            val t = try { JSONObject(s).optString("first_aired").takeIf { it.isNotEmpty() && it != "null" }
-                ?.let { java.time.Instant.parse(it).toEpochMilli() } ?: Long.MAX_VALUE } catch (e: Exception) { 0L }
-            airDates[k] = t; t
-        }
-        return at <= System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        // only a date already passed is remembered: a date still to come, or none yet ("to be
+        // announced"), is asked again each time, since Trakt fills in and moves release dates
+        airDates[k]?.let { return true }
+        val (c, s) = call(ctx, "GET", "/shows/$show/seasons/$season/episodes/$episode?extended=full", bearer = tok)
+        if (c != 200) return true   // cannot tell: show it
+        val at = try { JSONObject(s).optString("first_aired").takeIf { it.isNotEmpty() && it != "null" }
+            ?.let { java.time.Instant.parse(it).toEpochMilli() } ?: Long.MAX_VALUE } catch (e: Exception) { 0L }
+        if (at <= now) airDates[k] = at
+        return at <= now
     }
 
     private fun fetch(ctx: Context, who: String): JSONArray? {

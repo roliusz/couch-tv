@@ -42,7 +42,9 @@ object WatchLog {
     private val SKIP = setOf(
         "app.couchtv.launcher", "com.google.android.youtube.tvmusic", "com.spotify.tv.android",
         "com.google.android.apps.tv.launcherx", "com.sony.dtv.osat.music", "com.android.bluetooth",
-        "com.google.android.youtube.tv", "com.google.android.tv"
+        "com.google.android.youtube.tv", "com.google.android.tv",
+        // HBO Max: its own record is only the title; Trakt follows it properly (Trakt.kt)
+        "com.wbd.stream"
     )
     private fun skip(pkg: String) = pkg in SKIP || pkg.startsWith("com.sony.dtv.tv")
 
@@ -182,8 +184,13 @@ object WatchLog {
     private fun dir(ctx: Context) = File(ctx.filesDir, "watch").apply { mkdirs() }
     private fun file(ctx: Context) = File(ctx.filesDir, "watch.json")
 
-    @Synchronized fun load(ctx: Context): JSONArray =
-        try { JSONArray(file(ctx).readText()) } catch (e: Exception) { JSONArray() }
+    @Synchronized fun load(ctx: Context): JSONArray {
+        val all = try { JSONArray(file(ctx).readText()) } catch (e: Exception) { JSONArray() }
+        // records of apps no longer followed here (HBO Max, since Trakt has it) are left out
+        val out = JSONArray()
+        for (i in 0 until all.length()) all.optJSONObject(i)?.let { if (!skip(it.optString("package"))) out.put(it) }
+        return out
+    }
 
     @Synchronized private fun save(ctx: Context, list: JSONArray) {
         file(ctx).writeText(list.toString())
