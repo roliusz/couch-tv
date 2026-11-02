@@ -25,7 +25,7 @@ object Trakt {
     private const val SHOWS = 12                 // most recently watched shows looked at
     private const val FRESH_MS = 10 * 60_000L
     private const val STALE_MS = 14 * 86_400_000L      // only the last two weeks: older is not "keep watching"
-    private const val PREMIERES_MS = 6 * 3_600_000L
+    private const val PREMIERES_MS = 3_600_000L
     private const val CREDITS = 92.0                   // percent: this far in, only the credits are left
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
@@ -169,9 +169,9 @@ object Trakt {
         return if (token(ctx, w) != null && f.exists()) f.readText() else "[]"
     }
 
-    /** Season and series premieres coming up for the shows the person follows on Trakt (watched,
-     *  collected or on the watchlist), soonest first, one per show: kept for six hours, since the
-     *  calendar rarely changes. Fetched again in the background when stale. */
+    /** What is coming up for the shows the person follows on Trakt (watched, collected or on the
+     *  watchlist): premieres and new episodes, soonest first, one per show. Kept for an hour (six
+     *  hours was too long once new episodes were in); fetched again in the background when stale. */
     fun premieres(ctx: Context, who: String): String {
         val w = safe(who) ?: return "[]"
         val f = File(ctx.filesDir, "premieres-$w.json")
@@ -187,22 +187,30 @@ object Trakt {
 
     private fun fetchPremieres(ctx: Context, who: String): JSONArray? {
         val tok = access(ctx, who) ?: return null
-        val today = java.time.LocalDate.now().toString()
-        val (c, s) = call(ctx, "GET", "/calendars/my/shows/premieres/$today/33?extended=full,images", bearer = tok)
-        if (c != 200) return null
+        // a day back, so an episode out today still shows
+        val from = java.time.LocalDate.now().minusDays(1).toString()
+        // season and series premieres a month ahead, and every new episode on the person's
+        // calendar two weeks ahead
+        val (pc, ps) = call(ctx, "GET", "/calendars/my/shows/premieres/$from/33?extended=full,images", bearer = tok)
+        val (ec, es) = call(ctx, "GET", "/calendars/my/shows/$from/15?extended=full,images", bearer = tok)
+        if (pc != 200 && ec != 200) return null
+        val all = ArrayList<Pair<JSONObject, Boolean>>()
+        if (pc == 200) JSONArray(ps).let { a -> for (i in 0 until a.length()) all.add(a.getJSONObject(i) to true) }
+        if (ec == 200) JSONArray(es).let { a -> for (i in 0 until a.length()) all.add(a.getJSONObject(i) to false) }
         val now = System.currentTimeMillis()
         val seen = HashSet<Long>()
         val out = JSONArray()
-        val a = JSONArray(s)
-        (0 until a.length()).map { a.getJSONObject(it) }.sortedBy { it.optString("first_aired") }.forEach { e ->
+        // soonest first, one per show; a premiere wins over the same episode as a plain one
+        all.sortedWith(compareBy<Pair<JSONObject, Boolean>> { it.first.optString("first_aired") }.thenBy { !it.second }).forEach { (e, premiere) ->
             val show = e.optJSONObject("show") ?: return@forEach
             val ep = e.optJSONObject("episode") ?: return@forEach
             val id = show.optJSONObject("ids")?.optLong("trakt") ?: return@forEach
             val at = try { java.time.Instant.parse(e.optString("first_aired")).toEpochMilli() } catch (x: Exception) { return@forEach }
-            if (at < now - 86_400_000L || !seen.add(id)) return@forEach   // aired already (today's still counts)
+            if (at < now - 86_400_000L || !seen.add(id)) return@forEach   // out more than a day ago
             out.put(JSONObject()
                 .put("id", "t$id").put("title", show.optString("title"))
                 .put("season", ep.optInt("season")).put("episode", ep.optInt("number"))
+                .put("premiere", premiere || ep.optInt("number") == 1)
                 .put("first_aired", e.optString("first_aired"))
                 .put("network", show.optString("network"))
                 .put("streams", streamsHere(ctx, show.optJSONObject("ids")?.optLong("tmdb") ?: 0L))

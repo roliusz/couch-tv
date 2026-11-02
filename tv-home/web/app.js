@@ -725,7 +725,7 @@
       var prem = data.shows[0] && data.shows[0].premiere;
       track.innerHTML = data.shows.map(cardHTML).join("") +
         // fork: with a premiere first, each part of the row carries its own heading, moving with it
-        (prem ? '<span class="shelf-label">' + esc(t(premieresNow().length > 1 ? "upcoming_premieres" : "upcoming_premiere")) + "</span>" +
+        (prem ? '<span class="shelf-label">' + esc(t("upcoming")) + "</span>" +
           (data.shows.length > 1 ? '<span class="shelf-label kw">' + esc(t("keep_watching")) + "</span>" : "") : "");
       $("shelf-section").classList.toggle("premiering", !!prem);
       shelfEls = Array.prototype.slice.call(track.querySelectorAll(".ncard"));
@@ -743,7 +743,7 @@
     var art = it.backdrop || it.poster, pkg = it.app && it.app.package;
     var ep = it.season && it.episode ? "S" + it.season + ", E" + it.episode : (it.app ? it.app.name : "");
     var left = it.remaining_min || (it.runtime_min && it.progress ? Math.round(it.runtime_min * (1 - it.progress)) : 0);
-    var meta = it.premiere ? (it.episode === 1 ? "S" + it.season + " \u00b7 " : ep + " \u00b7 ") + premiereDay(it.first_aired)
+    var meta = it.premiere ? (it.isPremiere ? (it.episode === 1 && it.season > 1 ? "S" + it.season + " " + t("prem_word") : it.season === 1 && it.episode === 1 ? t("prem_series") : ep) : ep) + " \u00b7 " + premiereDay(it.first_aired)
       : (it.next ? t("up_next") + " \u00b7 " : "") + ep + (left ? " \u00b7 " + (left >= 60 ? Math.floor(left / 60) + "h " + (left % 60) + "m" : left + "m") : "");
     return '<div class="tile ncard' + (it.premiere ? " prem" : "") + '">' +
       (art ? '<img class="nart" src="' + esc(art) + '" alt="" decoding="async" onerror="tvNoArt(this)">' : '<span class="nart none">' + esc(it.title) + "</span>") +
@@ -761,19 +761,20 @@
     sp.className = "nart none"; sp.textContent = t ? t.textContent : "";
     im.replaceWith(sp);
   };
-  // ---- fork: Upcoming premieres, first in the Keep watching row: the season and series premieres
-  // coming up for the person's Trakt shows (Trakt.kt), one card that turns to the next one every 30
-  // seconds, soonest first. Only while the person has premieres coming; OK opens the show's app.
+  // ---- fork: Upcoming, first in the Keep watching row: premieres and new episodes coming up on the
+  // person's Trakt calendar (Trakt.kt), one card that turns to the next one every 30 seconds,
+  // soonest first. Only while something is coming; OK opens the show's app.
   var PREM = { i: 0, timer: null };
   var MOCK_PREM = [
     { id: "t2", title: "Severance", season: 3, episode: 1, first_aired: new Date(Date.now() + 2 * 86400000).toISOString(), network: "Apple TV+", art: null },
+    { id: "t4", title: "Lanterns", season: 1, episode: 8, premiere: false, first_aired: new Date(Date.now() + 1 * 86400000).toISOString(), network: "HBO", art: null },
     { id: "t3", title: "The Bear", season: 5, episode: 1, first_aired: new Date(Date.now() + 9 * 86400000).toISOString(), network: "Disney+", art: null }];
   function premieresNow() {
     var list = [];
     if (TV && TV.traktPremieres) { try { list = JSON.parse(TV.traktPremieres(who)) || []; } catch (e) { list = []; } }
     else if (MOCK) list = MOCK_PREM;
     return list.filter(function (e) { return (Date.parse(e.first_aired) || 0) > Date.now() - 86400000; }).map(function (e) {
-      return { id: e.id, title: e.title, season: e.season, episode: e.episode, first_aired: e.first_aired, premiere: true, source: "tv",
+      return { id: e.id, title: e.title, season: e.season, episode: e.episode, first_aired: e.first_aired, premiere: true, isPremiere: e.premiere !== false, source: "tv",
         app: (e.streams || []).map(appForNetwork).filter(Boolean)[0] || appForNetwork(e.network) || null, backdrop: e.art || null };
     });
   }
