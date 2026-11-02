@@ -374,8 +374,12 @@ object Trakt {
         if (c != 200) return true   // cannot tell: show it
         val at = try { JSONObject(s).optString("first_aired").takeIf { it.isNotEmpty() && it != "null" }
             ?.let { java.time.Instant.parse(it).toEpochMilli() } ?: Long.MAX_VALUE } catch (e: Exception) { 0L }
-        if (at <= now) airDates[k] = at
-        return at <= now
+        // Trakt's time is the original network's; streaming services often put it out here earlier
+        // the same day (Youth on HBO Max in NL, before Trakt's US evening): due today is out
+        val endOfToday = java.time.LocalDate.now().plusDays(1).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val out = at != Long.MAX_VALUE && at < endOfToday
+        if (out) airDates[k] = at
+        return out
     }
 
     private fun fetch(ctx: Context, who: String): JSONArray? {
