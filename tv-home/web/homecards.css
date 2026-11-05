@@ -1,0 +1,52 @@
+/* The living room and the weather, first in the Keep watching row (fork addition): the Second
+   Bedroom's Guest TV cards at this row's size, with its quiet control panels. No backdrop blur on
+   the cards: a live blur in the moving row made the TV lag (keepwatching.css). */
+.theme-night .ncard.hcard {
+  background: rgba(22, 22, 28, 0.62) !important; color: #fff; align-items: stretch; text-align: left;
+  box-shadow: inset 0 0 0 0.0625rem rgba(255, 255, 255, 0.16), 0 0.5rem 1.25rem rgba(0, 0, 0, 0.3);
+  padding: 1.125rem 1.25rem; display: flex; flex-direction: column; justify-content: space-between;
+}
+.theme-night .ncard.hcard.focus { background: rgba(70, 70, 80, 0.62) !important; box-shadow: inset 0 0 0 0.0625rem rgba(255, 255, 255, 0.3), 0 1.5rem 3rem rgba(0, 0, 0, 0.5); }
+.hcard .hk { display: flex; align-items: center; gap: 0.5rem; font-size: 1.1875rem; line-height: 1.5rem; font-weight: 600; color: rgba(255, 255, 255, 0.72); }
+.hcard .hk svg { width: 1.375rem; height: 1.375rem; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.hcard .hbig { font-size: 2rem; line-height: 2.375rem; font-weight: 650; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hcard .hsmall { margin-top: 0.125rem; font-size: 1.125rem; line-height: 1.5rem; color: rgba(255, 255, 255, 0.72); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hcard .hdays { display: flex; justify-content: space-between; text-align: center; }
+.hcard .hday { display: flex; flex-direction: column; align-items: center; min-width: 3.75rem; font-size: 1.0625rem; line-height: 1.375rem; color: rgba(255, 255, 255, 0.72); }
+.hcard .hday.now span { color: #fff; font-weight: 650; }
+.hcard .hday svg { width: 1.625rem; height: 1.625rem; margin: 0.1875rem 0; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; color: #fff; }
+.hcard .hday b { font-weight: 620; color: #fff; }
+.hcard .hday i { font-style: normal; font-size: 0.9375rem; line-height: 1.125rem; color: rgba(255, 255, 255, 0.55); }
+
+.hpanel {
+  position: fixed; inset: 0; z-index: 60; display: none; grid-template-columns: 26rem minmax(0, 1fr); gap: 5rem; padding: 6rem 7.5rem;
+  background: rgba(10, 10, 14, 0.84); color: #fff;
+}
+.hpanel.on { display: grid; }
+.hp-side h2 { margin: 0 0 2rem; font-size: 3rem; line-height: 3.5rem; font-weight: 680; letter-spacing: -0.02em; }
+.hp-row { padding: 0.875rem 1.25rem; margin-bottom: 0.375rem; border-radius: 1rem; font-size: 1.625rem; line-height: 2.125rem; color: rgba(255, 255, 255, 0.72); }
+.hp-row.lit { color: #fff; }
+.hp-row.focus { background: rgba(255, 255, 255, 0.92); color: #111; font-weight: 600; }
+.hp-sub { margin: 1.5rem 0 0.5rem 1.25rem; font-size: 1.1875rem; line-height: 1.625rem; font-weight: 600; color: rgba(255, 255, 255, 0.55); }
+.hpanel .ctl.hp-scene b { font-size: 6rem; line-height: 7rem; }
+.hpanel .ctl.hp-scene .ctl-bar { display: none; }
+.hpanel .ctl.hp-scene .ctl-sub { margin-top: 1.5rem; }
+.hp-main { padding-top: 0.75rem; min-width: 0; }
+.hpanel .ctl { max-width: 44rem; }
+.hpanel .ctl-name { font-size: 1.75rem; font-weight: 600; color: rgba(255, 255, 255, 0.72); }
+.hpanel .ctl b { display: block; margin-top: 0.5rem; font-family: "Antonio", "Inter", sans-serif; font-weight: 300; font-size: 11rem; line-height: 1; letter-spacing: -0.03em; color: rgba(255, 255, 255, 0.55); }
+.hpanel .ctl.on b { color: #fff; }
+.hpanel .ctl-bar { height: 0.25rem; margin: 2rem 0 1.5rem; border-radius: 0.125rem; background: rgba(255, 255, 255, 0.16); overflow: hidden; }
+.hpanel .ctl-bar i { display: block; height: 100%; background: rgba(255, 255, 255, 0.55); transition: width 300ms ease; }
+.hpanel .ctl.on .ctl-bar i { background: #ffc074; }
+.hpanel .ctl.on.cool .ctl-bar i { background: #7cc4ff; }
+.hpanel .ctl-sub { font-size: 1.625rem; line-height: 2.25rem; color: rgba(255, 255, 255, 0.72); }
+.hp-week { max-width: 60rem; }
+.hp-wd { display: grid; grid-template-columns: 7rem 2.5rem minmax(0, 1fr) 5rem 5rem 4.5rem; gap: 1rem; align-items: center; padding: 0.8125rem 0; border-bottom: 0.0625rem solid rgba(255, 255, 255, 0.12); font-size: 1.625rem; line-height: 2.25rem; }
+.hp-wd:last-child { border-bottom: 0; }
+.hp-wd svg { width: 2.125rem; height: 2.125rem; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.hp-wd em { font-style: normal; color: rgba(255, 255, 255, 0.72); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hp-wd u { text-decoration: none; text-align: right; color: #7cc4ff; }
+.hp-wd b { font-weight: 620; text-align: right; }
+.hp-wd i { font-style: normal; text-align: right; color: rgba(255, 255, 255, 0.55); }
+.hp-hint { position: absolute; left: 0; right: 0; bottom: 3rem; margin: 0; text-align: center; font-size: 1.375rem; line-height: 2rem; color: rgba(255, 255, 255, 0.6); }

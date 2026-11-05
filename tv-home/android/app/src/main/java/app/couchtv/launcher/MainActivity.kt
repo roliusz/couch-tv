@@ -269,6 +269,66 @@ class MainActivity : Activity() {
         c.disconnect(); o
     } catch (e: Exception) { null }
 
+    // The living room cards (fork): ha.json "room": {"label", "lights": [ids], "climate": id}. Only those
+    // entities can be read or changed from here; Home Assistant is asked once a minute and after a change.
+    private fun haService(h: JSONObject, path: String, body: JSONObject) = try {
+        val c = java.net.URL(h.getString("url").trimEnd('/') + "/api/services/" + path).openConnection() as HttpURLConnection
+        c.requestMethod = "POST"; c.doOutput = true
+        c.connectTimeout = 4000; c.readTimeout = 8000
+        c.setRequestProperty("Authorization", "Bearer " + h.optString("token"))
+        c.setRequestProperty("Content-Type", "application/json")
+        c.outputStream.use { it.write(body.toString().toByteArray()) }
+        c.responseCode; c.disconnect()
+    } catch (e: Exception) {}
+
+    private fun haRoomNow() {
+        val h = ha() ?: return
+        val r = h.optJSONObject("room") ?: return
+        io.execute {
+            val lights = JSONArray()
+            val ids = r.optJSONArray("lights") ?: JSONArray()
+            for (i in 0 until ids.length()) {
+                val id = ids.optString(i)
+                val st = haGet(h, "/api/states/$id") ?: continue
+                val a = st.optJSONObject("attributes") ?: JSONObject()
+                val b = a.optInt("brightness", -1)
+                lights.put(JSONObject().put("id", id).put("name", a.optString("friendly_name", id))
+                    .put("on", st.optString("state") == "on").put("available", st.optString("state") != "unavailable")
+                    .put("brightness", if (b >= 0) Math.round(b * 100 / 255f) else JSONObject.NULL))
+            }
+            val out = JSONObject().put("label", r.optString("label")).put("lights", lights).put("climate", JSONObject.NULL)
+                .put("scenes", r.optJSONArray("scenes") ?: JSONArray())
+            haGet(h, "/api/states/" + r.optString("climate"))?.let { st ->
+                val a = st.optJSONObject("attributes") ?: JSONObject()
+                out.put("climate", JSONObject().put("name", a.optString("friendly_name")).put("mode", st.optString("state"))
+                    .put("action", a.optString("hvac_action", "")).put("current", a.opt("current_temperature") ?: JSONObject.NULL)
+                    .put("target", a.opt("temperature") ?: JSONObject.NULL).put("min", a.optDouble("min_temp", 16.0))
+                    .put("max", a.optDouble("max_temp", 30.0)).put("step", a.optDouble("target_temp_step", 0.5)))
+            }
+            if (lights.length() > 0 || !out.isNull("climate")) main.post { js("window.tv && tv.haRoom && tv.haRoom(" + JSONObject.quote(out.toString()) + ")") }
+        }
+    }
+    private fun haRoomLight(id: String, on: Boolean, pct: Int) {
+        val h = ha() ?: return
+        val ids = h.optJSONObject("room")?.optJSONArray("lights") ?: return
+        if ((0 until ids.length()).none { ids.optString(it) == id }) return
+        io.execute {
+            val body = JSONObject().put("entity_id", id)
+            if (on && pct in 1..100) body.put("brightness_pct", pct)
+            haService(h, if (on) "light/turn_on" else "light/turn_off", body)
+            main.postDelayed({ haRoomNow() }, 1200)
+        }
+    }
+    private fun haRoomClimate(path: String, extra: JSONObject) {
+        val h = ha() ?: return
+        val id = h.optJSONObject("room")?.optString("climate").orEmpty()
+        if (id.isEmpty()) return
+        io.execute {
+            haService(h, path, extra.put("entity_id", id))
+            main.postDelayed({ haRoomNow() }, 1500)
+        }
+    }
+
     private fun haPlayersNow() {
         val h = ha() ?: return
         val players = h.optJSONArray("players") ?: return
@@ -701,6 +761,15 @@ class MainActivity : Activity() {
 
         @JavascriptInterface
         fun traktLink(who: String) = Trakt.link(this@MainActivity, who)
+
+        @JavascriptInterface
+        fun haRoom() = haRoomNow()
+        @JavascriptInterface
+        fun haLight(id: String, on: Boolean, pct: Int) = haRoomLight(id, on, pct)
+        @JavascriptInterface
+        fun haClimateOn(on: Boolean) = haRoomClimate(if (on) "climate/turn_on" else "climate/turn_off", JSONObject())
+        @JavascriptInterface
+        fun haClimateTarget(t: Double) = haRoomClimate("climate/set_temperature", JSONObject().put("temperature", t))
 
         @JavascriptInterface
         fun traktCancel(who: String) = Trakt.cancel(who)

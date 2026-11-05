@@ -461,8 +461,9 @@
   // or when Home settings chose another place. Hidden when Home settings switched the weather off.
   function refreshWeather() {
     if (!WX_SHOW) return Promise.resolve();
+    if (MOCK) { data.weather = mockWeather(); hcRefresh(); clock(); return Promise.resolve(); }
     var direct = OFFLINE || !!(ST.place && isFinite(ST.place.lat));
-    return (direct ? weatherDirect() : api("GET", "/api/weather")).then(function (j) { data.weather = j; clock(); }, function () {});
+    return (direct ? weatherDirect() : api("GET", "/api/weather")).then(function (j) { data.weather = j; hcRefresh(); clock(); }, function () {});
   }
 
   // Open-Meteo (free, no key), the same call the bridge makes. The words come from i18n.js.
@@ -472,11 +473,173 @@
     82: "wx_heavy_showers", 95: "wx_storms", 96: "wx_storms", 99: "wx_storms" };
   function weatherDirect() {
     var url = "https://api.open-meteo.com/v1/forecast?latitude=" + WXCFG.lat + "&longitude=" + WXCFG.lon +
-      "&current=temperature_2m,weather_code,is_day&timezone=" + encodeURIComponent(WXCFG.timezone || "auto") + "&forecast_days=1";
+      "&current=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=" +
+      encodeURIComponent(WXCFG.timezone || "auto") + "&forecast_days=7";
     return fetch(url).then(function (r) { return r.json(); }).then(function (j) {
       var c = j.current, code = Math.round(c.weather_code);
-      return { temp: Math.round(c.temperature_2m), code: code, text: "", is_day: !!c.is_day };
+      var d = j.daily || {}, days = (d.time || []).map(function (day, i) {
+        return { date: day, code: Math.round(d.weather_code[i]), hi: Math.round(d.temperature_2m_max[i]), lo: Math.round(d.temperature_2m_min[i]), rain: d.precipitation_probability_max[i] };
+      });
+      return { temp: Math.round(c.temperature_2m), code: code, text: "", is_day: !!c.is_day, days: days };
     });
+  }
+
+  // ---------------- fork: the living room and the weather, first in the row ----------------
+  // The same cards as the Second Bedroom's Guest TV. ha.json "room" names the lights and the climate;
+  // the launcher reads and changes them (MainActivity, haRoom) and hands the page tv.haRoom(json).
+  var HC = { room: null, panel: null, i: 0, climateT: 0 };
+  var HC_POLL = 60000;   // gentle on the Pi: Home Assistant is asked once a minute, and after a change
+  var HC_ICON = {
+    room: '<svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg>',
+    climate: '<svg viewBox="0 0 24 24"><path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/></svg>',
+    weather: '<svg viewBox="0 0 24 24"><path d="M17.5 19H8a4 4 0 1 1 .9-7.9A5.5 5.5 0 0 1 19.4 12a3.5 3.5 0 0 1-1.9 7z"/></svg>'
+  };
+  function mockWeather() {
+    var cs = [3, 61, 2, 0, 3, 80, 1], days = cs.map(function (c, i) {
+      var d = new Date(Date.now() + i * 86400000);
+      return { date: d.toISOString().slice(0, 10), code: c, hi: 9 + i, lo: i - 1, rain: (c > 50 ? 60 : 10) };
+    });
+    return { temp: 10, code: 3, text: "", is_day: true, days: days };
+  }
+  function homeCards() {
+    var out = [], r = HC.room;
+    if (r && r.lights.length) out.push({ hc: "room", title: t("hc_lights") });
+    if (r && r.climate) out.push({ hc: "climate", title: t("hc_climate") });
+    if (WX_SHOW && data.weather && data.weather.days && data.weather.days.length) out.push({ hc: "weather", title: t("hc_weather") });
+    return out;
+  }
+  function hcClimateWords(cl) {
+    var to = cl.target != null ? Math.round(cl.target * 10) / 10 + "\u00b0" : "";
+    if (cl.mode === "off") return t("hc_off");
+    return t(cl.action === "cooling" || cl.mode === "cool" ? "hc_cooling" : cl.action === "heating" || cl.mode === "heat" ? "hc_heating" : "hc_set", { t: to });
+  }
+  function hcDay(iso, i) {
+    if (i === 0) return t("hc_today");
+    var s = new Date(iso + "T12:00:00").toLocaleDateString(window.I18N ? window.I18N.locale() : "en-AU", { weekday: "short" });
+    return s.charAt(0).toUpperCase() + s.slice(1).replace(".", "");
+  }
+  function hcInner(kind) {
+    var head = function (k, title) { return '<div class="hk">' + HC_ICON[k] + "<span>" + esc(title) + "</span></div>"; };
+    if (kind === "room") {
+      var r = HC.room, lit = r.lights.filter(function (l) { return l.on; }).length;
+      return head("room", t("hc_lights")) + '<div class="hbody"><div class="hbig">' + esc(lit ? t("hc_lit", { n: lit, m: r.lights.length }) : t("hc_off")) + '</div><div class="hsmall">' + esc(r.label || "") + "</div></div>";
+    }
+    if (kind === "climate") {
+      var cl = HC.room.climate;
+      return head("climate", t("hc_climate")) + '<div class="hbody"><div class="hbig">' + (cl.current != null ? Math.round(cl.current * 10) / 10 + "\u00b0" : "\u2013") + '</div><div class="hsmall">' + esc(hcClimateWords(cl)) + "</div></div>";
+    }
+    return head("weather", t("hc_weather")) + '<div class="hdays">' + data.weather.days.slice(0, 4).map(function (d, i) {
+      return '<div class="hday' + (i === 0 ? " now" : "") + '"><span>' + esc(hcDay(d.date, i)) + "</span>" + wxIcon({ code: d.code, is_day: true }) +
+        "<b>" + esc(tempText(d.hi)) + "</b><i>" + esc(tempText(d.lo)) + "</i></div>";
+    }).join("") + "</div>";
+  }
+  // new readings: the row is redrawn only when a card comes or goes, else each card in place
+  function hcRefresh() {
+    if (!quickReady && !shelfEls.length) { if (data.showsBy) renderShelf(); return; }
+    var want = homeCards().map(function (c) { return c.hc; }).join(), have = (data.shows || []).filter(function (c) { return c.hc; }).map(function (c) { return c.hc; }).join();
+    if (want !== have) { renderShelf(); if (zone !== "hpanel") paintFocus(); }
+    else (data.shows || []).forEach(function (c, i) { if (c.hc && shelfEls[i]) shelfEls[i].innerHTML = hcInner(c.hc); });
+    if (zone === "hpanel") hpDraw();
+  }
+  function hcRoom(json) {
+    var r = null;
+    try { r = JSON.parse(json); } catch (e) {}
+    if (r && r.lights) { HC.room = r; hcRefresh(); }
+  }
+  var MOCK_ROOM = { label: "Living Room", lights: [
+    { id: "light.living_room_back", name: "Living Room Back", on: true, available: true, brightness: 35 },
+    { id: "light.living_room_front", name: "Living Room Front", on: true, available: true, brightness: 60 },
+    { id: "light.reading_light", name: "Reading Light", on: false, available: true, brightness: null },
+    { id: "light.living_room_strip", name: "Living Room Strip", on: false, available: true, brightness: null }],
+    scenes: [{ id: "script.sofa", name: "Sofa" }, { id: "script.good_night", name: "Night" }, { id: "script.good_morning", name: "Morning" }, { id: "script.brighten_lights", name: "Brighten" }],
+    climate: { name: "Living Room", mode: "heat", action: "heating", current: 21.5, target: 22, min: 16, max: 30, step: 0.5 } };
+  function hcAsk() {
+    if (MOCK) { HC.room = HC.room || MOCK_ROOM; hcRefresh(); return; }
+    try { if (TV && TV.haRoom) TV.haRoom(); } catch (e) {}
+  }
+  function hcCmd(fn) { if (!MOCK) { try { fn(); } catch (e) {} } }
+
+  function hpOpen(kind) {
+    HC.panel = kind; HC.i = 0; zone = "hpanel";
+    $("hpanel").classList.add("on");
+    hpDraw();
+    hcAsk();
+  }
+  function hpClose() {
+    HC.panel = null; zone = "shelf";
+    $("hpanel").classList.remove("on");
+    paintFocus();
+  }
+  function hpCtl(name, big, frac, sub, cls) {
+    return '<div class="ctl' + (cls ? " " + cls : "") + '"><div class="ctl-name">' + esc(name) + "</div><b>" + esc(big) + '</b><div class="ctl-bar"><i style="width:' +
+      Math.round(Math.max(0, Math.min(1, frac)) * 100) + '%"></i></div><div class="ctl-sub">' + esc(sub) + "</div></div>";
+  }
+  function hpDraw() {
+    var k = HC.panel, r = HC.room, left = "", main = "", hint = "";
+    if (k === "room" && r) {
+      var sc = r.scenes || [], n = r.lights.length, at = Math.min(HC.i, n + sc.length - 1), l = r.lights[at], b = l && l.on ? (l.brightness != null ? l.brightness : 100) : 0;
+      left = r.lights.map(function (x, i) { return '<div class="hp-row' + (i === at ? " focus" : "") + (x.on ? " lit" : "") + '">' + esc(x.name) + "</div>"; }).join("") +
+        (sc.length ? '<div class="hp-sub">' + esc(t("hc_scenes")) + "</div>" : "") +
+        sc.map(function (x, i) { return '<div class="hp-row lit' + (n + i === at ? " focus" : "") + '">' + esc(x.name) + "</div>"; }).join("");
+      if (l) main = l.available === false ? hpCtl(l.name, "\u2013", 0, t("hc_na"), "") : hpCtl(l.name, l.on ? b + "%" : t("hc_off"), b / 100, l.on ? t("hc_on") : t("hc_off"), l.on ? "on" : "");
+      else main = hpCtl(t("hc_scenes"), sc[at - n].name, 0, t("hc_scene_run"), "on hp-scene");
+      hint = t(l ? "hc_room_hint" : "hc_scene_hint");
+    } else if (k === "climate" && r && r.climate) {
+      var cl = r.climate, on = cl.mode !== "off", heat = cl.action === "heating" || cl.mode === "heat";
+      var fr = cl.target != null ? (cl.target - cl.min) / Math.max(1, cl.max - cl.min) : 0;
+      main = hpCtl(r.label || cl.name, cl.target != null ? Math.round(cl.target * 10) / 10 + "\u00b0" : "\u2013", fr,
+        (cl.current != null ? t("hc_now", { t: Math.round(cl.current * 10) / 10 + "\u00b0" }) + " \u00b7 " : "") + hcClimateWords(cl), on ? (heat ? "on heat" : "on cool") : "");
+      hint = t("hc_climate_hint");
+    } else if (k === "weather" && data.weather && data.weather.days) {
+      main = '<div class="hp-week">' + data.weather.days.map(function (d, i) {
+        return '<div class="hp-wd"><span>' + esc(hcDay(d.date, i)) + "</span>" + wxIcon({ code: d.code, is_day: true }) + "<em>" + esc(wxText({ code: d.code })) + "</em><u>" +
+          (d.rain != null ? esc(d.rain + "%") : "") + "</u><b>" + esc(tempText(d.hi)) + "</b><i>" + esc(tempText(d.lo)) + "</i></div>";
+      }).join("") + "</div>";
+      hint = t("hc_back_hint");
+    }
+    $("hpanel").innerHTML = '<div class="hp-side"><h2>' + esc(t(k === "room" ? "hc_lights" : k === "climate" ? "hc_climate" : "hc_weather")) + "</h2>" + left + '</div><div class="hp-main">' + main + "</div>" +
+      '<p class="hp-hint">' + esc(hint) + "</p>";
+  }
+  function hpLight(l, on, pct) {
+    l.on = on; if (pct != null) l.brightness = pct;
+    hpDraw(); hcRefresh();
+    hcCmd(function () { TV.haLight(l.id, on, pct == null ? -1 : pct); });
+  }
+  function hpMove(dx, dy) {
+    var r = HC.room;
+    if (HC.panel === "room" && r) {
+      if (dy) { HC.i = Math.max(0, Math.min(r.lights.length + (r.scenes || []).length - 1, HC.i + dy)); hpDraw(); return; }
+      var l = r.lights[HC.i];
+      if (dx && l && l.available !== false) {
+        var b = l.on ? (l.brightness != null ? l.brightness : 100) : 0;
+        var nb = Math.max(0, Math.min(100, Math.round((b + dx * 10) / 10) * 10));
+        hpLight(l, nb > 0, nb > 0 ? nb : null);
+      }
+      return;
+    }
+    if (HC.panel === "climate" && r && r.climate && dx) {
+      var cl = r.climate, st = cl.step || 0.5;
+      if (cl.mode === "off" || cl.target == null) return;
+      cl.target = Math.max(cl.min, Math.min(cl.max, Math.round((cl.target + dx * st) / st) * st));
+      hpDraw(); hcRefresh();
+      clearTimeout(HC.climateT);   // several presses send one change
+      HC.climateT = setTimeout(function () { hcCmd(function () { TV.haClimateTarget(cl.target); }); }, 700);
+    }
+  }
+  function hpOk() {
+    var r = HC.room;
+    if (HC.panel === "room" && r && HC.i >= r.lights.length) {
+      var sc = (r.scenes || [])[HC.i - r.lights.length];
+      if (sc) { haRun(sc.id); toast(sc.name); setTimeout(hcAsk, 2500); }
+      return;
+    }
+    if (HC.panel === "room" && r && r.lights[HC.i] && r.lights[HC.i].available !== false) { var l = r.lights[HC.i]; hpLight(l, !l.on, null); return; }
+    if (HC.panel === "climate" && r && r.climate) {
+      var cl = r.climate, on = cl.mode === "off";
+      cl.mode = on ? "heat" : "off"; if (!on) cl.action = "off";
+      hpDraw(); hcRefresh();
+      hcCmd(function () { TV.haClimateOn(on); });
+    }
   }
 
   // ---------------- quick buttons: from tvs[].quick in config.json, in that order ----------------
@@ -706,7 +869,9 @@
     });
     var pc = premiereCard();
     if (pc) data.shows.unshift(pc);
-    var anyone = !!pc || PEOPLE.some(function (p) { return (data.showsBy[p.id] || []).length; });
+    var hc = homeCards();   // fork: the living room and the weather, ahead of Upcoming
+    data.shows = hc.concat(data.shows);
+    var anyone = !!pc || hc.length > 0 || PEOPLE.some(function (p) { return (data.showsBy[p.id] || []).length; });
     // nobody has anything on the go: no empty box, the photo has the space
     $("shelf-section").classList.toggle("empty", !anyone);
     $("people").classList.toggle("empty", !anyone);
@@ -722,15 +887,17 @@
       // fork: Apple TV's Continue Watching cards, five in view and the rest scrolled to on the right
       // (scrollShelf): the artwork fills the card, the service's icon top right, and a blurred band
       // at the bottom with the title, a play symbol, how far in, and the episode (keepwatching.css)
-      var prem = data.shows[0] && data.shows[0].premiere;
+      var pi0 = hc.length, prem = data.shows[pi0] && data.shows[pi0].premiere, ki = pi0 + (prem ? 1 : 0), parts = hc.length || prem;
       track.innerHTML = data.shows.map(cardHTML).join("") +
-        // fork: with a premiere first, each part of the row carries its own heading, moving with it
-        (prem ? '<span class="shelf-label">' + esc(t("upcoming")) + "</span>" +
-          (data.shows.length > 1 ? '<span class="shelf-label kw">' + esc(t("keep_watching")) + "</span>" : "") : "");
-      $("shelf-section").classList.toggle("premiering", !!prem);
+        // fork: with cards or a premiere first, each part of the row carries its own heading, moving with it
+        (hc.length ? '<span class="shelf-label hc">' + esc((HC.room && HC.room.label) || t("hc_home")) + "</span>" : "") +
+        (prem ? '<span class="shelf-label up">' + esc(t("upcoming")) + "</span>" : "") +
+        (parts && data.shows.length > ki ? '<span class="shelf-label kw">' + esc(t("keep_watching")) + "</span>" : "");
+      $("shelf-section").classList.toggle("premiering", !!parts);
       shelfEls = Array.prototype.slice.call(track.querySelectorAll(".ncard"));
-      var kw = track.querySelector(".shelf-label.kw");
-      if (kw && shelfEls[1]) kw.style.left = shelfEls[1].offsetLeft + "px";
+      var kw = track.querySelector(".shelf-label.kw"), up = track.querySelector(".shelf-label.up");
+      if (up && shelfEls[pi0]) up.style.left = shelfEls[pi0].offsetLeft + "px";
+      if (kw && shelfEls[ki]) kw.style.left = shelfEls[ki].offsetLeft + "px";
       shelfEls.forEach(function (el) {
         var im = el.querySelector("img.nart");
         if (!im) return;
@@ -740,6 +907,7 @@
     }
   }
   function cardHTML(it) {
+    if (it.hc) return '<div class="tile ncard hcard">' + hcInner(it.hc) + "</div>";
     var art = it.backdrop || it.poster, pkg = it.app && it.app.package;
     var ep = it.season && it.episode ? "S" + it.season + ", E" + it.episode : (it.app ? it.app.name : "");
     var left = it.remaining_min || (it.runtime_min && it.progress ? Math.round(it.runtime_min * (1 - it.progress)) : 0);
@@ -797,8 +965,8 @@
   }
   // the next premiere, swapped into the card where it stands (focus, springs and the row stay put)
   function turnPremiere() {
-    var list = premieresNow(), el = shelfEls[0];
-    if (list.length < 2 || !el || !data.shows[0] || !data.shows[0].premiere) return;
+    var pi0 = homeCards().length, list = premieresNow(), el = shelfEls[pi0];
+    if (list.length < 2 || !el || !data.shows[pi0] || !data.shows[pi0].premiere) return;
     PREM.i = (PREM.i + 1) % list.length;
     var it = list[PREM.i], a = pickedApp(it);
     if (a) it = Object.assign({}, it, { app: a });
@@ -807,12 +975,12 @@
     el.classList.add("turning");
     setTimeout(function () {
       el.innerHTML = tmp.firstChild.innerHTML;
-      data.shows[0] = it;
+      data.shows[pi0] = it;
       var im = el.querySelector("img.nart");
       var show = function () { el.classList.remove("turning"); if (im) bakeBlur(el, im); };
       if (im && !(im.complete && im.naturalWidth)) { im.addEventListener("load", show, { once: true }); im.addEventListener("error", show, { once: true }); }
       else show();
-      if (zone === "shelf" && s === 0) topShelf();
+      if (zone === "shelf" && s === pi0) topShelf();
     }, 350);
   }
 
@@ -1148,6 +1316,7 @@
     if (zone === "tab") { $("side-tab").classList.add("focus"); return; }
     if (zone === "np") { renderNp(); return; }
     if (zone === "gear") { if (gridEls[g]) gridEls[g].classList.add("focus"); renderGear(); return; }
+    if (zone === "hpanel") { if (shelfEls[s]) shelfEls[s].classList.add("focus"); return; }
     if (zone === "menu") { renderMenu(); return; }
     if (zone === "pmenu") { renderPop(); $("people").classList.add("focus"); return; }
     if (zone === "quick" && quickEls[qi]) {
@@ -1187,6 +1356,7 @@
     if (zone === "np") { npMove(dx, dy); return; }
     if (zone === "settings") { setMove(dx, dy); return; }
     if (zone === "gear") { if (dy) { gi = Math.max(0, Math.min(1, gi + dy)); renderGear(); } return; }
+    if (zone === "hpanel") { hpMove(dx, dy); return; }
     if (lift) { moveLift(dx, dy); return; }
     // Night with More apps open: the cards step aside, so up and down skip them
     var cards = expanded ? [] : shelfEls;
@@ -1262,6 +1432,7 @@
     if (zone === "np") { fromNp(); return; }
     if (zone === "settings") { setBack(); return; }
     if (zone === "gear") { closeGear(); paintFocus(); return; }
+    if (zone === "hpanel") { hpClose(); return; }
     if (lift) { dropLift(); return; }   // BACK puts a picked-up app down where it is
     if (zone === "pmenu") { if (plift) dropPeople(); else closePop(); paintFocus(); return; }
     if (zone === "menu") { closeMenu(); paintFocus(); return; }   // BACK just closes the sleep choices
@@ -1279,7 +1450,8 @@
     touched = true;
     if (zone === "side" || zone === "tab" || zone === "np") return false;
     if (zone === "settings") return setHold();
-    if (zone === "gear") return false;
+    if (zone === "gear" || zone === "hpanel") return false;
+    if (zone === "shelf" && data.shows[s] && data.shows[s].hc) return false;
     if (lift) { dropLift(); return true; }
     if (zone === "pmenu") {
       if (plift) dropPeople();
@@ -1298,6 +1470,7 @@
     if (zone === "np") { npAct(NP_ITEMS[npi]); return; }
     if (zone === "settings") { setActivate(); return; }
     if (zone === "gear") { if (gi === 0) openSettings(); else openTvSettings(); return; }
+    if (zone === "hpanel") { hpOk(); return; }
     if (lift) { dropLift(); return; }
     if (zone === "menu") { setSleep(SLEEP_CHOICES[menuI]); paintFocus(); return; }
     if (zone === "pmenu") {
@@ -1318,6 +1491,7 @@
     if (zone === "shelf") {
       var it = data.shows[s];
       if (!it) return;
+      if (it.hc) { hpOpen(it.hc); return; }
       // a premiere with no app on this TV to open: when it starts, said again
       if (it.premiere && !(TV && it.app)) { toast(t("prem_on", { title: it.title, day: premiereDay(it.first_aired) })); return; }
       var resume = function () {
@@ -2795,7 +2969,7 @@
 
   function refresh() {
     // never reshuffle under something being moved, or under the settings screen
-    if (lift || zone === "pmenu" || zone === "settings" || zone === "gear") return Promise.resolve();
+    if (lift || zone === "pmenu" || zone === "settings" || zone === "gear" || zone === "hpanel") return Promise.resolve();
     if (OFFLINE) {
       // only the TV's own apps, in the order last saved; no shows, no Screens
       if (TV) data.apps = sortApps(nativeApps() || []);
@@ -2827,7 +3001,7 @@
     ];
     return Promise.all(jobs.map(function (p) { return p.then(function () { return true; }, function () { return false; }); }))
       .then(function (ok) {
-        if (lift || zone === "pmenu" || zone === "settings" || zone === "gear") return;
+        if (lift || zone === "pmenu" || zone === "settings" || zone === "gear" || zone === "hpanel") return;
         data.bridge = ok[0] || ok[2];
         var apps = TV ? nativeApps() : (window.MOCK_APPS ? window.MOCK_APPS.slice() : null);
         if (!apps) apps = (data.bridgeApps || []).filter(function (a) { return a.installed !== false && a.id !== "home"; })
@@ -2850,10 +3024,13 @@
 
   // the native side calls these
   // Home on the remote also re-reads the lists, so an order arranged on the phone shows straight away
+  setInterval(hcAsk, HC_POLL);
+  setTimeout(hcAsk, 1500);
   window.tv = { back: function () { goHome(true); },
     vpn: function (on) { document.documentElement.classList.toggle("vpn-on", !!on); if (window.tvAdapt) tvAdapt(); },
-    home: function () { wake(); if (zone === "side") closeSide(); if (zone === "settings") closeSettings(); else goHome(); refresh(); },
-    resume: function () { wake(); okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); },
+    haRoom: function (json) { hcRoom(json); },
+    home: function () { wake(); if (zone === "hpanel") hpClose(); if (zone === "side") closeSide(); if (zone === "settings") closeSettings(); else goHome(); refresh(); },
+    resume: function () { wake(); okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); hcAsk(); },
     watched: function () { if (OFFLINE) refresh(); },
     haDone: function (id, ok) { haDone(id, ok); },
     trakt: function (w) { if (zone === "settings") renderSettings(); if (OFFLINE || MOCK) refresh(); },
