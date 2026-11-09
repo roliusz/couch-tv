@@ -58,10 +58,19 @@ class HomeActivity : Activity() {
     private var sceneAt = 0
 
     override fun onCreate(b: Bundle?) {
-        super.onCreate(b)
         window.addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
         Motion.calm = Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
         intent?.let { app.couchtv.launcher.storeExtras(this, it) }   // settings from apply.sh
+        // started as an ordinary app (apply.sh, adb, the launcher list): the system would later make a
+        // second home for the Home button. Hand over to the real Home instead, so there is only one.
+        if (intent?.hasCategory(Intent.CATEGORY_HOME) != true) {
+            val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).setPackage(packageName)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            intent?.extras?.let { home.putExtras(it) }
+            try { startActivity(home) } catch (e: Exception) {}
+            super.onCreate(b); finish(); return
+        }
+        super.onCreate(b)
         Ui.init(this)
         app.couchtv.launcher.Doorbell.start(this)   // the door camera over whatever is on, when someone rings
         app.couchtv.launcher.NowOverlay.start(this)   // the music card over ambient mode
