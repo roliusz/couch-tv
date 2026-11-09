@@ -2963,7 +2963,7 @@
       }
       out[i] = merged;
     });
-    // Trakt's shows first, then what the TV recorded itself (YouTube TV); newest first in each
+    // Trakt's shows first, then what the TV recorded itself (WatchLog.kt; not YouTube TV); newest first in each
     return out.sort(function (a, b) { return (b.trakt ? 1 : 0) - (a.trakt ? 1 : 0) || when(b) - when(a); });
   }
 

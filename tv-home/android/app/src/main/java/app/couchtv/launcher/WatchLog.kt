@@ -44,7 +44,9 @@ object WatchLog {
         "com.google.android.apps.tv.launcherx", "com.sony.dtv.osat.music", "com.android.bluetooth",
         "com.google.android.youtube.tv", "com.google.android.tv",
         // HBO Max: its own record is only the title; Trakt follows it properly (Trakt.kt)
-        "com.wbd.stream"
+        "com.wbd.stream",
+        // YouTube TV: not a Keep watching source (the household's choice); its old records drop off too
+        "com.google.android.youtube.tvunplugged"
     )
     private fun skip(pkg: String) = pkg in SKIP || pkg.startsWith("com.sony.dtv.tv")
 
