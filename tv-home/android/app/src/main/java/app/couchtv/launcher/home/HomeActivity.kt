@@ -466,9 +466,9 @@ class HomeActivity : Activity() {
         }
         val yy = sum / maxOf(1, n)
         val l = (if (yy > 0.008856) 116 * Math.cbrt(yy) - 16 else 903.3 * yy) / 100
-        // earlier than adapt.js (0.86): on this TV a pale sky already washes white words out
+        // adapt.js: dark words only over a near-white sky (the shadow keeps the glass's shape elsewhere)
         val was = lightNow[v] ?: false
-        val now = if (was) l > 0.66 else l > 0.72
+        val now = if (was) l > 0.82 else l > 0.86
         lightNow[v] = now
         return now
     }
