@@ -190,7 +190,10 @@ class SceneView(ctx: Context) : View(ctx) {
     }
 
     /** Its picture into another canvas (the live glass), without touching its own layer. */
-    fun paintInto(c: Canvas) = onDraw(c)
+    /** Its picture into another canvas (the live glass), drawn on its own: the kept textures are
+     *  the screen's, and sharing them would let the glass take the incoming scene's fade early. */
+    fun paintInto(c: Canvas) { forGlass = true; try { onDraw(c) } finally { forGlass = false } }
+    private var forGlass = false
     override fun onDraw(c: Canvas) {
         val b = back; val f = front ?: return
         val gliding = b != null && fadeT < 1f
@@ -233,8 +236,11 @@ class SceneView(ctx: Context) : View(ctx) {
             val rc = n.beginRecording(width, height)
             try { draw(rc) } finally { n.endRecording() }
         }
-        n.alpha = a
-        c.drawRenderNode(n)
+        // the fade is the drawing's own, never the texture's: the screen and the glass both draw
+        // these, and a property on the texture would be shared between them
+        n.alpha = 1f
+        if (a >= 0.999f) c.drawRenderNode(n)
+        else { val k = c.saveLayerAlpha(0f, 0f, width.toFloat(), height.toFloat(), (255 * a).toInt()); c.drawRenderNode(n); c.restoreToCount(k) }
         return key
     }
 

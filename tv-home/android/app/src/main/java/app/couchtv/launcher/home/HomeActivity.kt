@@ -464,16 +464,30 @@ class HomeActivity : Activity() {
             return true
         }
         if (e.action != KeyEvent.ACTION_DOWN) return if (back || k in DIRS) true else super.dispatchKeyEvent(e)
+        if (k in DIRS) {
+            val (dx, dy) = when (k) { KeyEvent.KEYCODE_DPAD_LEFT -> -1 to 0; KeyEvent.KEYCODE_DPAD_RIGHT -> 1 to 0; KeyEvent.KEYCODE_DPAD_UP -> 0 to -1; else -> 0 to 1 }
+            repeat(steps(k, e)) { move(dx, dy) }
+            return true
+        }
         when (k) {
-            KeyEvent.KEYCODE_DPAD_LEFT -> move(-1, 0)
-            KeyEvent.KEYCODE_DPAD_RIGHT -> move(1, 0)
-            KeyEvent.KEYCODE_DPAD_UP -> move(0, -1)
-            KeyEvent.KEYCODE_DPAD_DOWN -> move(0, 1)
             KeyEvent.KEYCODE_MENU -> if (e.repeatCount == 0) hold()
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> if (np.on) np.act("play") else return super.dispatchKeyEvent(e)
             else -> if (back) goHome(true) else return super.dispatchKeyEvent(e)
         }
         return true
+    }
+    /**
+     * A held arrow: a remote that holds the key gets Android's own fast repeat. The Remote 3 sends a
+     * new tap every ~150 ms instead, so a run of quick taps on one arrow counts as a hold and speeds
+     * up the same way: one step a tap at first, then two, then three.
+     */
+    private var lastDir = 0; private var lastAt = 0L; private var streak = 0
+    private fun steps(k: Int, e: KeyEvent): Int {
+        if (e.repeatCount > 0) return 1   // a real hold: Android already repeats it quickly
+        val now = e.eventTime
+        streak = if (k == lastDir && now - lastAt < 260) streak + 1 else 0
+        lastDir = k; lastAt = now
+        return when { streak >= 10 -> 3; streak >= 4 -> 2; else -> 1 }
     }
     private val DIRS = setOf(KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN)
     private fun pressFocused(on: Boolean) {
