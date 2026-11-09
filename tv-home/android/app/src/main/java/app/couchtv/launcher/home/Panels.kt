@@ -182,7 +182,11 @@ class NowPlayingCard(ctx: Context, private val home: HomeActivity) : View(ctx) {
     private var art: Bitmap? = null
     private var artFor: String? = null
     private var shown = 0f
-    private val appear = Spring(0f, 0.002f) { shown = it; alpha = it; translationY = -Ui.r(0.75f) * (1 - it); val s = 0.97f + 0.03f * it; scaleX = s; scaleY = s; visibility = if (it <= 0.001f) INVISIBLE else VISIBLE; (parent as? View)?.invalidate() }
+    private val appear = Spring(0f, 0.002f) {
+        shown = it
+        // resting: the card stays off the top (the wide bar shows the song); a new song changes only what is on it
+        if (!home.idle) { alpha = it; translationY = -Ui.r(0.75f) * (1 - it); val s = 0.97f + 0.03f * it; scaleX = s; scaleY = s }
+        visibility = if (it <= 0.001f) INVISIBLE else VISIBLE; (parent as? View)?.invalidate() }
     private val focusS = FloatArray(3)
     private val springs = Array(3) { k -> Spring(0f) { focusS[k] = it; invalidate() } }
     private var level = 0f

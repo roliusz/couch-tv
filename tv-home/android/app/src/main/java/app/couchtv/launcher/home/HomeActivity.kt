@@ -365,7 +365,7 @@ class HomeActivity : Activity() {
     }
 
     // ------------------------------------------------------------------ resting (OLED): the dock and cards slide away
-    private var idle = false
+    var idle = false; private set
     private val goIdle = Runnable {
         if (zone !in listOf("grid", "shelf", "tab", "np") || apps.expanded || dock.lift != null) { idleSoon(); return@Runnable }
         idle = true
@@ -386,6 +386,9 @@ class HomeActivity : Activity() {
     private fun wideUpdate() {
         val p = playing
         if (p == null) { if (npWide.visibility == View.VISIBLE) npWide.visibility = View.GONE; return }
+        // music starting while resting: the bar comes up along the bottom
+        if (idle && npWide.visibility != View.VISIBLE) { npWide.visibility = View.VISIBLE; npWide.translationY = Ui.r(14f)
+            npWide.animate().translationY(0f).setDuration(900).setInterpolator(android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)).setUpdateListener { root.invalidate() }.start() }
         npWide.speaker = p.speaker; npWide.title = p.title; npWide.artist = p.artist
         npWide.pos = p.position; npWide.dur = p.duration; npWide.playing = p.state == "playing"
         if (p.picture != null) io.execute { val b = Net.bitmap(this, p.picture, 256); main.post { npWide.art = b } }
