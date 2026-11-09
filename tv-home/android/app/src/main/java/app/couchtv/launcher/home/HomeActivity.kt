@@ -128,9 +128,24 @@ class HomeActivity : Activity() {
         if (intent?.getBooleanExtra("rest", false) == true) { main.removeCallbacks(goIdle); main.postDelayed(goIdle, 4000) }
     }
 
+    private var away = false
+    override fun onStop() {
+        super.onStop(); away = true
+        // while away the dock and the cards wait below the screen (and the corners above it), so
+        // coming back they rise in over the scene instead of appearing on an empty screen
+        listOf(dock to Ui.r(16f), shelf to Ui.r(34f), tab to -Ui.r(12f), np to -Ui.r(26f)).forEach { (v, y) -> v.animate().cancel(); v.translationY = y }
+    }
     override fun onResume() {
         super.onResume()
-        if (veil.alpha > 0f) comeBack()
+        // back on the home (from an app, or Home pressed anywhere): the home rises into place, and
+        // the glass is made again from what is behind it now (the scene may have changed meanwhile)
+        if (veil.alpha > 0f || away) {
+            veil.animate().cancel(); veil.alpha = 0f
+            // once the scene is on screen (two frames), then the rise
+            Choreographer.getInstance().postFrameCallback { Choreographer.getInstance().postFrameCallback { comeBack() } }
+        }
+        away = false
+        glassDirty(); main.postDelayed({ glassDirty() }, 400); main.postDelayed({ glassDirty() }, 1800)
         Trakt.onChange = { main.post { refresh(); settings?.traktChanged() } }
         WatchLog.onChange = { main.post { refresh() } }
         refresh(); refreshWeather(); askRoom()
@@ -340,8 +355,12 @@ class HomeActivity : Activity() {
         launching = false
         veil.animate().cancel(); veil.alpha = 0f
         if (Motion.calm) return
-        listOf(tab to 0L, np to 0L, shelf to 50L, dock to 100L).forEach { (v, d) ->
-            v.translationY = Ui.r(1f); v.animate().translationY(0f).setStartDelay(d).setDuration(360).setInterpolator(android.view.animation.PathInterpolator(0.2f, 0.8f, 0.2f, 1f)).setUpdateListener { root.invalidate() }.start()
+        // the dock and the cards slide up into place from below the screen, the person tab and
+        // Now Playing drop in from the top (the resting distances, idle.css), quickly
+        val ease = android.view.animation.PathInterpolator(0.2f, 0.8f, 0.2f, 1f)
+        listOf(Triple(dock, Ui.r(16f), 0L), Triple(shelf, Ui.r(34f), 40L), Triple(tab, -Ui.r(12f), 80L), Triple(np, -Ui.r(26f), 80L)).forEach { (v, from, d) ->
+            v.animate().cancel(); v.alpha = 1f; if (v.translationY == 0f) v.translationY = from
+            v.animate().translationY(0f).setStartDelay(d).setDuration(560).setInterpolator(ease).setUpdateListener { root.invalidate() }.start()
         }
     }
 

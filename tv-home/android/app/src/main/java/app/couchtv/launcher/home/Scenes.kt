@@ -97,7 +97,14 @@ object Scenes {
  * the same frosted photo is the glass for every panel (Glass).
  */
 class SceneView(ctx: Context) : View(ctx) {
-    private class Shown(val scene: Scene, val photo: Bitmap, val fg: Bitmap?, val fill: Bitmap) { var a = 0f }
+    private class Shown(val scene: Scene, val photo: Bitmap, val fg: Bitmap?, val fill: Bitmap) {
+        var a = 0f
+        // drawn once and kept as textures: the photo with its shade, the clock, the cut-out
+        val photoNode = RenderNode("photo").apply { setUseCompositingLayer(true, null) }
+        val clockNode = RenderNode("clock").apply { setUseCompositingLayer(true, null) }
+        val fgNode = RenderNode("fg").apply { setUseCompositingLayer(true, null) }
+        var photoKey = ""; var clockKey = ""; var fgKey = ""
+    }
     private val io = Executors.newSingleThreadExecutor()
     private var back: Shown? = null
     private var front: Shown? = null
@@ -135,6 +142,7 @@ class SceneView(ctx: Context) : View(ctx) {
         anim = android.animation.ValueAnimator.ofFloat(0f, 1f).setDuration(1600).apply {
             interpolator = null
             addUpdateListener { v -> val t = v.animatedValue as Float; fadeT = ease.getInterpolation(t); glideT = glideEase.getInterpolation(t); invalidate(); onChange?.invoke() }
+            addListener(object : android.animation.AnimatorListenerAdapter() { override fun onAnimationEnd(an: android.animation.Animator) { fadeT = 1f; glideT = 1f; back = null; invalidate(); onChange?.invoke() } })
             start()
         }
     }
@@ -146,12 +154,14 @@ class SceneView(ctx: Context) : View(ctx) {
             val glassCopy = if (s.glass) load(s, "-glass") else null
             // the clock's fill: the scene's glass copy, or (for a photo with none) the photo frosted here
             val fill = glassCopy ?: Glass.frost(photo)
-            val hw = photo
+            // kept on the graphics chip, so coming back to the home never waits to upload it again
+            val hw = photo.copy(Bitmap.Config.HARDWARE, false) ?: photo
             val small = Bitmap.createScaledBitmap(photo, 192, 108, true)
+            val fgHw = fg?.let { it.copy(Bitmap.Config.HARDWARE, false) ?: it }
             post {
                 back?.let { if (it !== front) recycle(it) }
                 back = front
-                front = Shown(s, hw, fg, fill)
+                front = Shown(s, hw, fgHw, fill)
                 thumb = small
                 fadeT = 0f; glideT = 0f
                 fadeTo(if (back == null) 1f else 0f)
@@ -200,9 +210,8 @@ class SceneView(ctx: Context) : View(ctx) {
         val x = sc.clockLeft?.let { Ui.r(it) + w / 2 } ?: width / 2f
         return floatArrayOf(x, Ui.r(sc.clockTop) + size * 0.41f, size * 0.82f)
     }
-    private fun drawScene(c: Canvas, s: Shown, a: Float, glideFrom: Shown? = null, glideTo: Shown? = null) {
+    private fun drawPhoto(c: Canvas, s: Shown, a: Float, dim: Float) {
         val sc = s.scene
-        val dim = (if (night) 0.72f else 1f) * sc.photoDim
         photoP.alpha = (255 * a).toInt()
         photoP.colorFilter = if (dim < 1f) ColorMatrixColorFilter(ColorMatrix().apply { setScale(dim, dim, dim, 1f) }) else null
         cover(s.photo); c.drawBitmap(s.photo, null, dst, photoP)
@@ -210,6 +219,31 @@ class SceneView(ctx: Context) : View(ctx) {
             shadeP.shader = LinearGradient(0f, 0f, 0f, height.toFloat(), cols, sc.shadeStops, Shader.TileMode.CLAMP)
             shadeP.alpha = (255 * a).toInt(); c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), shadeP)
         }
+    }
+    private fun drawFg(c: Canvas, s: Shown, a: Float, dim: Float) {
+        val f = s.fg ?: return
+        photoP.alpha = (255 * a).toInt()
+        photoP.colorFilter = if (dim < 1f) ColorMatrixColorFilter(ColorMatrix().apply { setScale(dim, dim, dim, 1f) }) else null
+        cover(f); c.drawBitmap(f, null, dst, photoP)
+    }
+    /** A kept texture, drawn again only when what is in it changes. */
+    private inline fun node(c: Canvas, n: RenderNode, key: String, old: String, a: Float, draw: (Canvas) -> Unit): String {
+        if (key != old || !n.hasDisplayList()) {
+            n.setPosition(0, 0, width, height)
+            val rc = n.beginRecording(width, height)
+            try { draw(rc) } finally { n.endRecording() }
+        }
+        n.alpha = a
+        c.drawRenderNode(n)
+        return key
+    }
+
+    private fun drawScene(c: Canvas, s: Shown, a: Float, glideFrom: Shown? = null, glideTo: Shown? = null) {
+        val sc = s.scene
+        val dim = (if (night) 0.72f else 1f) * sc.photoDim
+        val hw = c.isHardwareAccelerated && width > 0
+        if (hw) s.photoKey = node(c, s.photoNode, "$dim|$width", s.photoKey, a) { drawPhoto(it, s, 1f, dim) }
+        else drawPhoto(c, s, a, dim)
         if (time.isNotEmpty()) {
             // scene change: the outgoing and incoming clocks travel together, so it reads as one
             // clock gliding to its new place (motion.js glide)
@@ -219,10 +253,13 @@ class SceneView(ctx: Context) : View(ctx) {
                 if (s === glideFrom) { c.translate((B[0] - A[0]) * p, (B[1] - A[1]) * p); val k = 1 + (B[2] / A[2] - 1) * p; c.scale(k, k, A[0], A[1]) }
                 else { c.translate((A[0] - B[0]) * (1 - p), (A[1] - B[1]) * (1 - p)); val k = 1 + (A[2] / B[2] - 1) * (1 - p); c.scale(k, k, B[0], B[1]) }
             }
-            drawClock(c, s, a, dim)
+            // while a minute rolls the clock is drawn as it moves; otherwise its texture is reused
+            if (hw && rollMs >= 760f) s.clockKey = node(c, s.clockNode, "$time|$night|$width", s.clockKey, a) { drawClock(it, s, 1f, dim) }
+            else drawClock(c, s, a, dim)
             c.restoreToCount(n)
         }
-        s.fg?.let { cover(it); c.drawBitmap(it, null, dst, photoP) }
+        if (hw) { if (s.fg != null) s.fgKey = node(c, s.fgNode, "$dim|$width", s.fgKey, a) { drawFg(it, s, 1f, dim) } }
+        else drawFg(c, s, a, dim)
     }
     private fun cover(bmp: Bitmap) {
         val sx = width.toFloat() / bmp.width; val sy = height.toFloat() / bmp.height; val k = maxOf(sx, sy)
