@@ -50,7 +50,7 @@ WIZARD=com.google.android.tungsten.setupwraith
 # screensaver to start and turns the screen off when it is idle instead
 AMBIENT=com.google.android.apps.tv.dreamx
 WANT="com.google.android.apps.tv.launcherx com.google.android.tvlauncher ${AMBIENT_OFF:+$AMBIENT} ${EXTRA_OFF:-}"
-HOME_ACT=app.couchtv.launcher/.MainActivity
+HOME_ACT=app.couchtv.launcher/.home.HomeActivity   # fork: the native home
 RESOLVE="cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME"
 
 # Remember the home the TV had, so undo.sh puts that one back (it may be the maker's own). Only

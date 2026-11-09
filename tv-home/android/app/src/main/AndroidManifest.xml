@@ -61,6 +61,20 @@
             android:resizeableActivity="false"
             android:screenOrientation="landscape"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|fontScale|locale">
+            <!-- the web home: no longer the Home (the native one is); kept for its built-in pages -->
+        </activity>
+        <!-- the native home (home/HomeActivity.kt), beside the web one until it takes over as Home -->
+        <activity
+            android:name=".home.HomeActivity"
+            android:exported="true"
+            android:label="Home"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:screenOrientation="landscape"
+            android:theme="@style/Home"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|fontScale"
+            android:stateNotNeeded="true"
+            android:clearTaskOnLaunch="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />

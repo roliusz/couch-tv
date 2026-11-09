@@ -182,45 +182,7 @@ class MainActivity : Activity() {
      * computer), "config_b64" (the home's settings from config.json, base64 JSON, for the built-in
      * copy) and "tv" (which TV this is, for a house with more than one; none = the default TV).
      */
-    private fun readExtras(i: Intent) {
-        val e = prefs.edit()
-        i.getStringExtra("bridge")?.trim()?.let {
-            if (it.isEmpty() || it == "none") e.remove("bridge") else e.putString("bridge", it.trimEnd('/'))
-        }
-        i.getStringExtra("config_b64")?.let {
-            try {
-                val json = String(android.util.Base64.decode(it, android.util.Base64.DEFAULT), Charsets.UTF_8)
-                JSONObject(json)   // only keep it if it is real JSON
-                e.putString("config", json)
-            } catch (x: Exception) {
-                // a broken value keeps the settings the app already had
-            }
-        }
-        i.getStringExtra("tv")?.let { e.putString("tv", it) }
-        // fork: Home Assistant (address, the scenes to show, and the access token). Kept in the
-        // launcher; the page only gets the scene names and asks the launcher to run one.
-        i.getStringExtra("ha_b64")?.let {
-            try {
-                val json = String(android.util.Base64.decode(it, android.util.Base64.DEFAULT), Charsets.UTF_8)
-                val o = JSONObject(json)
-                if (o.optString("url").startsWith("http")) e.putString("ha", json)
-            } catch (x: Exception) {}
-        }
-        // fork: the Trakt API app (client ID and secret) for "next episode" (Trakt.kt)
-        i.getStringExtra("trakt_b64")?.let {
-            try {
-                val json = String(android.util.Base64.decode(it, android.util.Base64.DEFAULT), Charsets.UTF_8)
-                if (JSONObject(json).optString("client_id").isNotEmpty()) e.putString("trakt", json)
-            } catch (x: Exception) {}
-        }
-        i.getStringExtra("tmdb_b64")?.let {
-            try {
-                val json = String(android.util.Base64.decode(it, android.util.Base64.DEFAULT), Charsets.UTF_8)
-                if (JSONObject(json).optString("api_key").isNotEmpty()) e.putString("tmdb", json)
-            } catch (x: Exception) {}
-        }
-        e.apply()
-    }
+    private fun readExtras(i: Intent) = storeExtras(this, i)
 
     // ---------------------------------------------------------------- Home Assistant (fork)
 
@@ -901,6 +863,8 @@ class MainActivity : Activity() {
     }
 
     private fun launchPackage(pkg: String): Boolean {
+        // fork: the native home, from its tile here (it is part of this app, so never in the app list)
+        if (pkg == "native:home") return start(Intent(this, app.couchtv.launcher.home.HomeActivity::class.java))
         val i = packageManager.getLeanbackLaunchIntentForPackage(pkg)
             ?: packageManager.getLaunchIntentForPackage(pkg)
             ?: return false
@@ -975,8 +939,9 @@ class MainActivity : Activity() {
 
     /** The app's square icon as a PNG, for the dock and the Keep watching badges. 256 px (fork; was
      *  128): the dock shows it at about 112 px and grows the focused one to 1.22, so 128 was stretched. */
-    private fun iconImage(pkg: String): ByteArray? {
-        icons[pkg]?.let { return it }
+    private fun iconImage(pkg0: String): ByteArray? {
+        icons[pkg0]?.let { return it }
+        val pkg = if (pkg0 == "native:home") packageName else pkg0
         val ri = tvApps().firstOrNull { it.activityInfo.packageName == pkg }
         val d = ri?.loadIcon(packageManager)
             ?: try { packageManager.getApplicationIcon(pkg) } catch (e: Exception) { return null }
@@ -984,7 +949,7 @@ class MainActivity : Activity() {
         d.setBounds(0, 0, 256, 256)
         d.draw(Canvas(bmp))
         val bytes = ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.PNG, 100, it); bmp.recycle() }.toByteArray()
-        icons[pkg] = bytes
+        icons[pkg0] = bytes
         return bytes
     }
 
@@ -1098,3 +1063,44 @@ class MainActivity : Activity() {
         private val AMBER = Color.parseColor("#FFB52E")
     }
 }
+
+/** The settings apply.sh hands over at install (Home settings, Home Assistant, Trakt, TMDB): both homes read them. */
+fun storeExtras(ctx: android.content.Context, i: Intent) {
+        val e = ctx.getSharedPreferences("home", android.content.Context.MODE_PRIVATE).edit()
+        i.getStringExtra("bridge")?.trim()?.let {
+            if (it.isEmpty() || it == "none") e.remove("bridge") else e.putString("bridge", it.trimEnd('/'))
+        }
+        i.getStringExtra("config_b64")?.let {
+            try {
+                val json = String(android.util.Base64.decode(it, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                JSONObject(json)   // only keep it if it is real JSON
+                e.putString("config", json)
+            } catch (x: Exception) {
+                // a broken value keeps the settings the app already had
+            }
+        }
+        i.getStringExtra("tv")?.let { e.putString("tv", it) }
+        // fork: Home Assistant (address, the scenes to show, and the access token). Kept in the
+        // launcher; the page only gets the scene names and asks the launcher to run one.
+        i.getStringExtra("ha_b64")?.let {
+            try {
+                val json = String(android.util.Base64.decode(it, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                val o = JSONObject(json)
+                if (o.optString("url").startsWith("http")) e.putString("ha", json)
+            } catch (x: Exception) {}
+        }
+        // fork: the Trakt API app (client ID and secret) for "next episode" (Trakt.kt)
+        i.getStringExtra("trakt_b64")?.let {
+            try {
+                val json = String(android.util.Base64.decode(it, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                if (JSONObject(json).optString("client_id").isNotEmpty()) e.putString("trakt", json)
+            } catch (x: Exception) {}
+        }
+        i.getStringExtra("tmdb_b64")?.let {
+            try {
+                val json = String(android.util.Base64.decode(it, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                if (JSONObject(json).optString("api_key").isNotEmpty()) e.putString("tmdb", json)
+            } catch (x: Exception) {}
+        }
+        e.apply()
+    }

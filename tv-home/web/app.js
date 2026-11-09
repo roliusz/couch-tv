@@ -1032,9 +1032,10 @@
         .sort(function (a, b) { return at[a.package] - at[b.package]; });
       var gained = items.filter(function (it) { return at[it.package] === undefined; });   // new apps go below the line
       items = known.concat(gained);
-      // the line counts the apps above it that this TV still has
-      var above = o.packages.slice(0, o.line).filter(function (p) { return known.some(function (it) { return it.package === p; }); }).length;
-      line = Math.min(DOCK_APPS, above);
+      // fork: an app gone from above the line (uninstalled) leaves its place to the next one, so
+      // the dock keeps its size rather than shrinking
+      var fit = items.filter(function (it) { return !tucked(it) || o.packages.slice(0, o.line).indexOf(it.package) >= 0; }).length;
+      line = Math.min(DOCK_APPS, o.line, fit);
     }
     return { items: items, line: line };
   }
