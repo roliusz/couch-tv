@@ -139,6 +139,7 @@ class HomeActivity : Activity() {
         super.onResume()
         // back on the home (from an app, or Home pressed anywhere): the home rises into place, and
         // the glass is made again from what is behind it now (the scene may have changed meanwhile)
+        endRest()
         if (veil.alpha > 0f || away) {
             veil.animate().cancel(); veil.alpha = 0f
             // once the scene is on screen (two frames), then the rise
@@ -152,6 +153,7 @@ class HomeActivity : Activity() {
     }
     override fun onNewIntent(i: Intent?) {
         super.onNewIntent(i)
+        endRest()
         if (i != null && (i.hasExtra("config_b64") || i.hasExtra("ha_b64") || i.hasExtra("trakt_b64"))) { app.couchtv.launcher.storeExtras(this, i); restart() }
         // Home pressed while the home is in front: back to the start
         if (zone == "side") side.close(false)
@@ -411,6 +413,18 @@ class HomeActivity : Activity() {
         }
     }
     fun idleSoon() { main.removeCallbacks(goIdle); main.postDelayed(goIdle, (store.idleMinutes * 60000).toLong()) }
+    /** Standby ends at once, with no animation (coming back to the home does its own). */
+    private fun endRest() {
+        if (!idle) return
+        idle = false
+        main.removeCallbacks(goIdle)
+        driftAnim?.cancel()
+        npWide.animate().cancel(); npWide.visibility = View.GONE
+        listOf(scene, date).forEach { it.animate().cancel(); it.translationX = 0f; it.translationY = 0f; it.scaleX = 1f; it.scaleY = 1f }
+        scene.resting = 0f
+        np.update()
+        idleSoon()
+    }
     private fun wake(): Boolean {
         if (!idle) { idleSoon(); return false }
         idle = false
