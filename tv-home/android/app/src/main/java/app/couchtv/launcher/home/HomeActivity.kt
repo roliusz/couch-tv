@@ -87,7 +87,6 @@ class HomeActivity : Activity() {
         veil = View(this).apply { setBackgroundColor(Color.BLACK); alpha = 0f }
         val mp = FrameLayout.LayoutParams.MATCH_PARENT
         root.addView(scene, mp, mp)
-        scene.setLayerType(View.LAYER_TYPE_HARDWARE, null)   // drawn once, reused while nothing in it changes
         root.addView(topShelf, mp, mp)
         root.addView(date, mp, mp)
         root.addView(shelf, mp, mp)
