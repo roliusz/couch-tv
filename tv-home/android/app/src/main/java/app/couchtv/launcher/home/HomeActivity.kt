@@ -113,10 +113,20 @@ class HomeActivity : Activity() {
         root.shadow(np, { Ui.r(2.25f) }, { if (onLight(np)) 24f else 14f }, { if (onLight(np)) 8f else 8f }, { if (onLight(np)) 0x40000000 else 0x1F000000 })
         root.shadow(npWide, { Ui.r(2.75f) }, { 14f }, { 8f }, { 0x1F000000 })
         root.shadow(toast, { Ui.r(2f) }, { Ui.r(1.5f) }, { Ui.r(0.375f) }, { if (onLight(toast)) 0x40000000 else 0x26000000 })
+        // until the first photo is up, the dock, the cards and the corners wait off the screen: drawn
+        // over plain black their glass has nothing behind it, so they showed bare and only took on
+        // their glass a moment later
+        tuck(); away = true
+        // a photo that never comes (a broken file): the home comes anyway
+        main.postDelayed({ if (!sceneUp) { sceneUp = true; if (riseWaiting) { riseWaiting = false; comeBack() } } }, 2500)
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
 
         Glass.listeners.add { dock.invalidateGlass(); shelf.invalidateGlass(); tab.invalidate(); np.invalidate(); toast.invalidate() }
-        scene.onShown = { s -> date.scene = s }
+        scene.onShown = { s ->
+            date.scene = s
+            // the first photo is up: now the glass has something behind it, the home rises in
+            if (!sceneUp) { sceneUp = true; if (riseWaiting) { riseWaiting = false; afterTwoFrames { comeBack() } } }
+        }
         scene.onChange = { glassDirty() }
         buildScenes()
         tick()
@@ -141,8 +151,12 @@ class HomeActivity : Activity() {
         super.onStop(); away = true
         // while away the dock and the cards wait below the screen (and the corners above it), so
         // coming back they rise in over the scene instead of appearing on an empty screen
-        listOf(dock to Ui.r(16f), shelf to Ui.r(34f), tab to -Ui.r(12f), np to -Ui.r(26f)).forEach { (v, y) -> v.animate().cancel(); v.translationY = y }
+        tuck()
     }
+    private var sceneUp = false
+    private var riseWaiting = false
+    private fun tuck() = listOf(dock to Ui.r(16f), shelf to Ui.r(34f), tab to -Ui.r(12f), np to -Ui.r(26f)).forEach { (v, y) -> v.animate().cancel(); v.translationY = y }
+    private fun afterTwoFrames(f: () -> Unit) = Choreographer.getInstance().postFrameCallback { Choreographer.getInstance().postFrameCallback { f() } }
     override fun onResume() {
         super.onResume()
         // back on the home (from an app, or Home pressed anywhere): the home rises into place, and
@@ -150,8 +164,8 @@ class HomeActivity : Activity() {
         endRest()
         if (veil.alpha > 0f || away) {
             veil.animate().cancel(); veil.alpha = 0f
-            // once the scene is on screen (two frames), then the rise
-            Choreographer.getInstance().postFrameCallback { Choreographer.getInstance().postFrameCallback { comeBack() } }
+            // once the scene is on screen (two frames), then the rise; at the start, once its photo is up
+            if (sceneUp) afterTwoFrames { comeBack() } else riseWaiting = true
         }
         away = false
         glassDirty(); main.postDelayed({ glassDirty() }, 400); main.postDelayed({ glassDirty() }, 1800)
@@ -364,7 +378,7 @@ class HomeActivity : Activity() {
     private fun comeBack() {
         launching = false
         veil.animate().cancel(); veil.alpha = 0f
-        if (Motion.calm) return
+        if (Motion.calm) { listOf(dock, shelf, tab, np).forEach { it.animate().cancel(); it.translationY = 0f }; root.invalidate(); return }
         // the dock and the cards slide up into place from below the screen, the person tab and
         // Now Playing drop in from the top (the resting distances, idle.css), quickly
         val ease = android.view.animation.PathInterpolator(0.2f, 0.8f, 0.2f, 1f)

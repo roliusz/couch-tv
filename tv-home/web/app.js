@@ -901,7 +901,10 @@
       shelfEls.forEach(function (el) {
         var im = el.querySelector("img.nart");
         if (!im) return;
-        if (im.complete && im.naturalWidth) bakeBlur(el, im); else im.addEventListener("load", function () { bakeBlur(el, im); }, { once: true });
+        // the picture and its blurred band show together, once both are ready (no second tint)
+        var ready = function () { bakeBlur(el, im); el.classList.add("ready"); };
+        if (im.complete && im.naturalWidth) ready();
+        else { im.addEventListener("load", ready, { once: true }); im.addEventListener("error", function () { el.classList.add("ready"); }, { once: true }); }
       });
       return;
     }
@@ -977,7 +980,7 @@
       el.innerHTML = tmp.firstChild.innerHTML;
       data.shows[pi0] = it;
       var im = el.querySelector("img.nart");
-      var show = function () { el.classList.remove("turning"); if (im) bakeBlur(el, im); };
+      var show = function () { if (im && im.naturalWidth) bakeBlur(el, im); el.classList.add("ready"); el.classList.remove("turning"); };
       if (im && !(im.complete && im.naturalWidth)) { im.addEventListener("load", show, { once: true }); im.addEventListener("error", show, { once: true }); }
       else show();
       if (zone === "shelf" && s === pi0) topShelf();

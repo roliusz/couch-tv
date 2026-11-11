@@ -79,3 +79,8 @@
 }
 .ncard.prem > * { transition: opacity 350ms ease-out; }
 .ncard.prem.turning > * { opacity: 0; }
+
+/* the artwork and its baked blur fade in together once both are drawn (app.js, renderShelf), so the
+   band never shows one tint, then another a moment later as the blur arrives */
+.ncard .nart:not(.none), .ncard .nblur { opacity: 0; transition: opacity 260ms ease-out; }
+.ncard.ready .nart, .ncard.ready .nblur { opacity: 1; }
