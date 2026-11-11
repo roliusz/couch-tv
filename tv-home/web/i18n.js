@@ -250,7 +250,8 @@
     qp_voice_mode: "Voice mode",
     qp_picture_mode: "Picture mode",
     qp_on: "On",
-    qp_max: "Max"
+    qp_max: "Max",
+    qp_scenes: "Scenes"
   };
 
   S.es = {
@@ -485,7 +486,8 @@
     qp_voice_mode: "Modo voz",
     qp_picture_mode: "Modo de imagen",
     qp_on: "Sí",
-    qp_max: "Máx."
+    qp_max: "Máx.",
+    qp_scenes: "Escenas"
   };
 
   // Only what Mexico says differently; everything else comes from es.

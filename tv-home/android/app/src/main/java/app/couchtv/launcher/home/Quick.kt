@@ -87,7 +87,10 @@ object Sleep {
 @SuppressLint("ViewConstructor")
 class QuickPanel(private val act: QuickActivity) : View(act) {
     private class Tile(val title: String, val icon: Icon, val sub: String? = null) {
-        var options: List<String> = emptyList()   // the choices shown in the list
+        var list: () -> List<String> = { emptyList() }   // the choices shown in the list
+        var options: List<String>
+            get() = list()
+            set(v) { list = { v } }
         var at = 0                                  // the highlighted one
         var value: () -> String = { "" }            // what the tile says while not chosen
         var link = false                            // an arrow instead of a value: OK opens it
@@ -156,26 +159,28 @@ class QuickPanel(private val act: QuickActivity) : View(act) {
         val st = s ?: return
         val ctx = act
         val was = tiles.getOrNull(fi)?.title
+        val wasAt = tiles.getOrNull(fi)?.at ?: 0
         tiles.clear()
         fun needKey(): Boolean { if (!st.hasKey) { say(L.t("qp_need_key")); return true }; return false }
         val AS = L.t("qp_audio_system")
         fun num(sl: Sony.Slider) = if (sl.value >= sl.max && sl.max > 0) L.t("qp_max") else sl.value.toString()
 
-        // the living room: each light switches on or off with OK, each scene runs with OK
+        // the living room: one Lights tile with each light in its list (OK switches it on or
+        // off, the panel stays), one Scenes tile with each scene (OK runs it)
         home?.let { r ->
-            for (l in r.lights) tiles.add(Tile(l.name, Icons.bulb, r.label).apply {
-                value = { if (!l.available) "—" else if (l.on) L.t("qp_on") else L.t("qp_off") }
-                dim = { !l.available }
-                take = {
-                    if (l.available) {
-                        l.on = !l.on; invalidate()
-                        ha?.light(l.id, l.on, null) { act.room() }
-                    }
+            fun short(n: String) = n.removePrefix(r.label).trim().ifEmpty { n }
+            if (r.lights.isNotEmpty()) tiles.add(Tile(L.t("hc_lights"), Icons.bulb, r.label).apply {
+                list = { r.lights.map { l -> short(l.name) + " · " + (if (!l.available) "—" else if (l.on) L.t("qp_on") else L.t("qp_off")) } }
+                value = { val n = r.lights.count { it.on }; if (n > 0) L.t("hc_lit", "n" to n, "m" to r.lights.size) else L.t("hc_off") }
+                take = { k ->
+                    val l = r.lights[k]
+                    if (l.available) { l.on = !l.on; invalidate(); ha?.light(l.id, l.on, null) { act.room() } }
                 }
             })
-            for ((id, name) in r.scenes) tiles.add(Tile(name, Icons.qsScene, r.label).apply {
+            if (r.scenes.isNotEmpty()) tiles.add(Tile(L.t("qp_scenes"), Icons.qsScene, r.label).apply {
+                options = r.scenes.map { it.second }
                 link = true
-                take = { ha?.run(id) { ok -> say(if (ok) name else L.t("qp_failed")) } }
+                take = { k -> val (id, name) = r.scenes[k]; ha?.run(id) { ok -> say(if (ok) name else L.t("qp_failed")) } }
             })
         }
         // audio output
@@ -248,6 +253,8 @@ class QuickPanel(private val act: QuickActivity) : View(act) {
         fi = tiles.indexOfFirst { it.title == was }.takeIf { it >= 0 } ?: 0
         if (was == null || (home != null && first)) { fi = 0; first = false }
         tiles.forEach { pickCurrent(it) }
+        // a fresh reading (a light just switched) keeps the highlight where it was
+        tiles.getOrNull(fi)?.let { if (it.title == was) it.at = wasAt.coerceIn(0, maxOf(0, it.options.size - 1)) }
     }
     /** The list starts on what the tile is set to now. */
     private fun pickCurrent(tl: Tile) {
