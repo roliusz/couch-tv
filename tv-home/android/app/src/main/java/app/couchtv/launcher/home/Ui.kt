@@ -116,9 +116,52 @@ object Motion : Choreographer.FrameCallback {
  * blurred per frame. A new scene crossfades its glass with the photo.
  */
 object Glass {
+    // What every glass piece shows, frosted once per picture in our own code (never by the graphics
+    // chip, whose blur this TV sometimes leaves out, showing clear glass): the scene (old and new,
+    // crossfading), dimmed at night and while resting, and a show's artwork over it while the top
+    // shelf is up (old and new, crossfading).
     var now: Bitmap? = null
     var old: Bitmap? = null
     var t = 1f
+    var dim = 0f
+    var shelfNow: Bitmap? = null
+    var shelfOld: Bitmap? = null
+    var shelfT = 1f
+    var shelfOn = 0f
+    /** A scene's frosted picture: the photo as the screen shows it (cover, dimmed, its shade and the
+     *  scrim under the cards), at a quarter size, blurred (glass.css blur 10px) and saturated 150%. */
+    fun frostScene(photo: Bitmap, photoDim: Float, shade: IntArray?, stops: FloatArray?): Bitmap {
+        val w = Ui.width / 4; val h = Ui.height / 4
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888); val c = Canvas(out)
+        val src = if (photo.config == Bitmap.Config.HARDWARE) photo.copy(Bitmap.Config.ARGB_8888, false) else photo
+        val k = maxOf(w.toFloat() / src.width, h.toFloat() / src.height); val bw = src.width * k; val bh = src.height * k
+        val p = Paint(Paint.FILTER_BITMAP_FLAG)
+        if (photoDim < 1f) p.colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setScale(photoDim, photoDim, photoDim, 1f) })
+        c.drawBitmap(src, null, RectF((w - bw) / 2, (h - bh) / 2, (w + bw) / 2, (h + bh) / 2), p)
+        if (src !== photo) src.recycle()
+        if (shade != null) c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), Paint().apply { shader = LinearGradient(0f, 0f, 0f, h.toFloat(), shade, stops, Shader.TileMode.CLAMP) })
+        c.drawRect(0f, h * 0.6f, w.toFloat(), h.toFloat(), Paint().apply { shader = LinearGradient(0f, h * 0.6f, 0f, h.toFloat(), 0, 0x80000000.toInt(), Shader.TileMode.CLAMP) })
+        return finish(out)
+    }
+    /** A show's frosted artwork for the top shelf: cover, its two shades, blurred and saturated. */
+    fun frostShelf(art: Bitmap): Bitmap {
+        val w = Ui.width / 4; val h = Ui.height / 4
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888); val c = Canvas(out)
+        c.drawColor(Color.BLACK)
+        val k = maxOf(w.toFloat() / art.width, h.toFloat() / art.height); val bw = art.width * k; val bh = art.height * k
+        c.drawBitmap(art, null, RectF((w - bw) / 2, (h - bh) / 2, (w + bw) / 2, (h + bh) / 2), Paint(Paint.FILTER_BITMAP_FLAG))
+        c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), Paint().apply { shader = LinearGradient(0f, 0f, w.toFloat(), 0f, intArrayOf(0x9E000000.toInt(), 0x40000000, 0), floatArrayOf(0f, 0.45f, 0.7f), Shader.TileMode.CLAMP) })
+        c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), Paint().apply { shader = LinearGradient(0f, 0f, 0f, h.toFloat(), intArrayOf(0x59000000, 0, 0, 0x8C000000.toInt()), floatArrayOf(0f, 0.22f, 0.45f, 1f), Shader.TileMode.CLAMP) })
+        return finish(out)
+    }
+    private fun finish(out: Bitmap): Bitmap {
+        val w = out.width; val h = out.height
+        val px = IntArray(w * h); out.getPixels(px, 0, w, 0, 0, w, h)
+        blurPixels(px, IntArray(w * h), w, h, 2)   // three passes of 2 px at a quarter: about 10 px on screen
+        out.setPixels(px, 0, w, 0, 0, w, h)
+        saturate(out, 1.5f)
+        return out
+    }
     val listeners = ArrayList<() -> Unit>()
     const val WASH = 0x1FFFFFFF
     const val WASH_FOCUS = 0x38FFFFFF
@@ -239,29 +282,37 @@ object Glass {
         private val lit = Path()
         private val litP = Paint(Paint.ANTI_ALIAS_FLAG)
         private var aFor: Bitmap? = null; private var bFor: Bitmap? = null
+        private val sa = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        private val sb = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        private var saFor: Bitmap? = null; private var sbFor: Bitmap? = null
         private val m = Matrix()
         private val rr = RectF()
 
-        private fun layer(p: Paint, bmp: Bitmap, alpha: Int, c: Canvas, rad: Float, dx: Float, dy: Float, was: Bitmap?): Bitmap {
+        private fun layer(p: Paint, bmp: Bitmap, alpha: Int, c: Canvas, rad: Float, dx: Float, dy: Float, was: Bitmap?, s: Float = 1f): Bitmap {
             if (was !== bmp) p.shader = BitmapShader(bmp, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+            // lined up with the screen, never magnified with the piece (a focused card grows)
             m.setScale(Ui.width.toFloat() / bmp.width, Ui.height.toFloat() / bmp.height)
-            m.postTranslate(-dx, -dy); p.shader.setLocalMatrix(m); p.alpha = alpha
+            m.postTranslate(-dx, -dy); m.postScale(1f / s, 1f / s); p.shader.setLocalMatrix(m); p.alpha = alpha
             c.drawRoundRect(rr, rad, rad, p); return bmp
         }
         /** dx, dy: where the piece's top left corner is on the screen. */
         /** s: the piece's own zoom (a focused card grows); the glass behind it stays lined up with the screen, never magnified. */
-        fun draw(c: Canvas, w: Float, h: Float, rad: Float, dx: Float, dy: Float, washColor: Int = WASH, dim: Float = 0f, backdrop: Bitmap? = null, gradient: Shader? = null, s: Float = 1f) {
+        fun draw(c: Canvas, w: Float, h: Float, rad: Float, dx: Float, dy: Float, washColor: Int = WASH, dim: Float = 0f, backdrop: Bitmap? = null, gradient: Shader? = null, s: Float = 1f, own: android.graphics.RenderNode? = null) {
             rr.set(0f, 0f, w, h)
-            val node = live
             // nothing behind it yet (the first moment after start): no stand-in, no edge, nothing
-            if (backdrop == null && node == null && now == null) return
-            if (backdrop == null && node != null && c.isHardwareAccelerated) {
-                val n = c.save()
-                clipP.reset(); clipP.addRoundRect(rr, rad, rad, Path.Direction.CW); c.clipPath(clipP)
-                c.scale(1f / s, 1f / s); c.translate(-dx, -dy); c.scale(4f, 4f)
-                c.drawRenderNode(node)
-                c.restoreToCount(n)
-            } else (backdrop ?: now)?.let { aFor = layer(a, it, 255, c, rad, dx, dy, aFor) }
+            if (backdrop == null && now == null) return
+            if (backdrop != null) aFor = layer(a, backdrop, 255, c, rad, dx, dy, aFor, s)
+            else {
+                val o = old; val n = now!!
+                if (o != null && t < 1f) { aFor = layer(a, o, 255, c, rad, dx, dy, aFor, s); bFor = layer(b, n, (255 * t).toInt(), c, rad, dx, dy, bFor, s) }
+                else aFor = layer(a, n, 255, c, rad, dx, dy, aFor, s)
+                if (Glass.dim > 0f) { shadow.color = Ui.alpha(Color.BLACK, Glass.dim); c.drawRoundRect(rr, rad, rad, shadow) }
+                if (shelfOn > 0f) {
+                    val so = shelfOld; val sn = shelfNow
+                    if (so != null && (sn == null || shelfT < 1f)) saFor = layer(sa, so, (255 * shelfOn).toInt(), c, rad, dx, dy, saFor, s)
+                    if (sn != null) sbFor = layer(sb, sn, (255 * shelfOn * (if (so != null) shelfT else 1f)).toInt(), c, rad, dx, dy, sbFor, s)
+                }
+            }
             if (gradient != null) { shadow.shader = gradient; shadow.color = Color.WHITE; c.drawRoundRect(rr, rad, rad, shadow); shadow.shader = null }
             if (dim > 0f) { shadow.color = Ui.alpha(Color.BLACK, dim); c.drawRoundRect(rr, rad, rad, shadow) }
             wash.color = washColor; c.drawRoundRect(rr, rad, rad, wash)
@@ -305,7 +356,7 @@ open class ShadowFrame(ctx: android.content.Context) : android.widget.FrameLayou
     private fun drawShadow(c: Canvas, s: Spec) {
         val v = s.view
         if (v.visibility != android.view.View.VISIBLE || v.alpha <= 0f || v.width == 0) return
-        if (Glass.live == null && Glass.now == null) return   // the glass is not there yet: neither is its shadow
+        if (Glass.now == null) return   // the glass is not there yet: neither is its shadow
         val n = c.save()
         c.translate(v.left + v.translationX, v.top + v.translationY)
         c.scale(v.scaleX, v.scaleY, v.pivotX, v.pivotY)

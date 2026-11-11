@@ -120,10 +120,12 @@ class SceneView(ctx: Context) : View(ctx) {
     var time = ""
         set(v) { if (v != field) { val was = field; field = v; roll(was); invalidate(); onChange?.invoke() } }
     var night = false
-        set(v) { if (v != field) { field = v; invalidate() } }
+        set(v) { if (v != field) { field = v; invalidate(); glassDim() } }
     /** Dimmed and drifting while the home rests (idle.css). */
     var resting = 0f
-        set(v) { field = v; invalidate(); onChange?.invoke() }
+        set(v) { field = v; invalidate(); glassDim() }
+    /** The glass's dimming: after 9 pm the photo is at 72%, and resting darkens it 18% more. */
+    private fun glassDim() { Glass.dim = 1f - (if (night) 0.72f else 1f) * (1f - 0.18f * resting); onChange?.invoke() }
     var onShown: ((Scene) -> Unit)? = null
     /** The photo at 192 x 108, for reading how light it is behind the glass (adapt.js). */
     var thumb: Bitmap? = null
@@ -138,11 +140,11 @@ class SceneView(ctx: Context) : View(ctx) {
     private var anim: android.animation.ValueAnimator? = null
     private fun fadeTo(from: Float) {
         anim?.cancel()
-        if (Motion.calm || from >= 1f) { fadeT = 1f; glideT = 1f; invalidate(); onChange?.invoke(); return }
+        if (Motion.calm || from >= 1f) { fadeT = 1f; glideT = 1f; Glass.t = 1f; Glass.old = null; invalidate(); onChange?.invoke(); return }
         anim = android.animation.ValueAnimator.ofFloat(0f, 1f).setDuration(1600).apply {
             interpolator = null
-            addUpdateListener { v -> val t = v.animatedValue as Float; fadeT = ease.getInterpolation(t); glideT = glideEase.getInterpolation(t); invalidate(); onChange?.invoke() }
-            addListener(object : android.animation.AnimatorListenerAdapter() { override fun onAnimationEnd(an: android.animation.Animator) { fadeT = 1f; glideT = 1f; back = null; invalidate(); onChange?.invoke() } })
+            addUpdateListener { v -> val t = v.animatedValue as Float; fadeT = ease.getInterpolation(t); glideT = glideEase.getInterpolation(t); Glass.t = fadeT; invalidate(); onChange?.invoke() }
+            addListener(object : android.animation.AnimatorListenerAdapter() { override fun onAnimationEnd(an: android.animation.Animator) { fadeT = 1f; glideT = 1f; back = null; Glass.t = 1f; Glass.old = null; invalidate(); onChange?.invoke() } })
             start()
         }
     }
@@ -157,12 +159,16 @@ class SceneView(ctx: Context) : View(ctx) {
             // kept on the graphics chip, so coming back to the home never waits to upload it again
             val hw = photo.copy(Bitmap.Config.HARDWARE, false) ?: photo
             val small = Bitmap.createScaledBitmap(photo, 192, 108, true)
+            val frosted = Glass.frostScene(photo, s.photoDim, s.shade, s.shadeStops)
             val fgHw = fg?.let { it.copy(Bitmap.Config.HARDWARE, false) ?: it }
             post {
                 back?.let { if (it !== front) recycle(it) }
                 back = front
                 front = Shown(s, hw, fgHw, fill)
                 thumb = small
+                // the glass: the new scene's frosted picture, crossfading with the old one
+                Glass.old = if (back == null) null else Glass.now
+                Glass.now = frosted; Glass.t = if (back == null) 1f else 0f
                 fadeT = 0f; glideT = 0f
                 fadeTo(if (back == null) 1f else 0f)
                 onShown?.invoke(s)

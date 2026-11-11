@@ -148,6 +148,8 @@ object Icons {
     val thermo get() = of("""<svg viewBox="0 0 24 24"><path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/></svg>""")
     val calendar get() = of("""<svg viewBox="0 0 24 24" class="solid"><path d="M7 2.5a1 1 0 0 1 1 1V5h8V3.5a1 1 0 1 1 2 0V5h1a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3h1V3.5a1 1 0 0 1 1-1zM4 10v9a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-9z"/></svg>""")
     val playSmall get() = of("""<svg viewBox="0 0 24 24" class="solid"><path d="M7 4.8v14.4a1 1 0 0 0 1.5.86l11.6-7.2a1 1 0 0 0 0-1.72L8.5 3.94A1 1 0 0 0 7 4.8z"/></svg>""")
+    // the web's VPN chip: a shield with a lock in it (index.html #vpn-chip)
+    val vpnLock get() = of("""<svg viewBox="0 0 24 24"><path d="M12 2.6 4.6 5.4v5.5c0 4.7 3.1 8.9 7.4 10.4 4.3-1.5 7.4-5.7 7.4-10.4V5.4z"/><rect class="fill" x="9" y="11" width="6" height="4.6" rx="0.9"/><path d="M10.2 11V9.6a1.8 1.8 0 0 1 3.6 0V11"/></svg>""")
     val vpn get() = of("""<svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>""")
     // weather, by Open-Meteo's WMO code
     val sun get() = of("""<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></svg>""")

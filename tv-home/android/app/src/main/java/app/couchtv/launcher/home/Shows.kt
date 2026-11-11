@@ -60,7 +60,7 @@ class Shows(private val ctx: Context, private val store: Store, private val apps
         val log = try { WatchLog.load(ctx) } catch (e: Exception) { JSONArray() }
         val mine = (0 until log.length()).mapNotNull { log.optJSONObject(it) }
             .filter { !NOT_SHOWS.matches(it.optString("package")) && it.optLong("last_played") >= since }
-            .map { e -> Show(e.optString("id"), e.optString("title"), e.optInt("season"), e.optInt("episode"), e.optString("episode_title").ifEmpty { null },
+            .map { e -> Show(e.optString("id"), e.optString("title"), e.optInt("season"), e.optInt("episode"), e.optString("episode_title").takeIf { it.isNotEmpty() && it != "null" },
                 appFor(e.optString("package")) ?: AppItem("app", e.optString("package"), e.optString("package")), e.optString("art").ifEmpty { null },
                 if (e.has("progress") && !e.isNull("progress")) e.optDouble("progress") else null, e.optInt("remaining_min"),
                 e.optString("who").ifEmpty { null }, e.optLong("last_played")) }
@@ -72,7 +72,7 @@ class Shows(private val ctx: Context, private val store: Store, private val apps
         val a = try { JSONArray(Trakt.upNext(ctx, who)) } catch (e: Exception) { return emptyList() }
         return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { e ->
             if (e.optBoolean("finished")) Show(e.optString("id"), e.optString("title"), finished = true)
-            else Show(e.optString("id"), e.optString("title"), e.optInt("season"), e.optInt("episode"), e.optString("episode_title").ifEmpty { null },
+            else Show(e.optString("id"), e.optString("title"), e.optInt("season"), e.optInt("episode"), e.optString("episode_title").takeIf { it.isNotEmpty() && it != "null" },
                 strs(e.optJSONArray("streams")).firstNotNullOfOrNull { appForNetwork(it) } ?: appForNetwork(e.optString("network"))
                     ?: strs(e.optJSONArray("watch")).firstNotNullOfOrNull { appForNetwork(it) },
                 e.optString("art").ifEmpty { null }, if (e.has("progress") && !e.isNull("progress")) e.optDouble("progress") else null,

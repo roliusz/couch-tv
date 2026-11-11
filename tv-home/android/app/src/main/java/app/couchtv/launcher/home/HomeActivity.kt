@@ -86,6 +86,7 @@ class HomeActivity : Activity() {
         topShelf = TopShelf(this, this)
         date = DateLine(this, this)
         tab = SideTab(this, this)
+        vpn = VpnPill(this, this)
         shelf = Shelf(this, this)
         dock = Dock(this, this)
         panel = HomePanel(this, this)
@@ -101,6 +102,7 @@ class HomeActivity : Activity() {
         root.addView(shelf, mp, mp)
         root.addView(dock, mp, mp)
         root.addView(tab, FrameLayout.LayoutParams(-2, -2).apply { leftMargin = Ui.ri(5f); topMargin = Ui.ri(3.75f) })
+        root.addView(vpn, FrameLayout.LayoutParams(-2, -2).apply { leftMargin = Ui.ri(5f); topMargin = Ui.ri(3.75f) })
         root.addView(np, FrameLayout.LayoutParams(-2, -2, Gravity.END).apply { rightMargin = Ui.ri(5f); topMargin = Ui.ri(3.75f) })
         root.addView(npWide, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { leftMargin = Ui.ri(5f); rightMargin = Ui.ri(5f); bottomMargin = Ui.ri(2.875f) })
         root.addView(panel, mp, mp)
@@ -110,6 +112,7 @@ class HomeActivity : Activity() {
         setContentView(root)
         // over a light background the white glass gets a deeper shadow, so its shape still shows
         root.shadow(tab, { tab.height / 2f }, { if (onLight(tab)) 20f else 14f }, { if (onLight(tab)) 6f else 8f }, { if (onLight(tab)) 0x40000000 else 0x1F000000 })
+        root.shadow(vpn, { vpn.height / 2f }, { if (onLight(vpn)) 20f else 14f }, { if (onLight(vpn)) 6f else 8f }, { if (onLight(vpn)) 0x40000000 else 0x1F000000 })
         root.shadow(np, { Ui.r(2.25f) }, { if (onLight(np)) 24f else 14f }, { if (onLight(np)) 8f else 8f }, { if (onLight(np)) 0x40000000 else 0x1F000000 })
         root.shadow(npWide, { Ui.r(2.75f) }, { 14f }, { 8f }, { 0x1F000000 })
         root.shadow(toast, { Ui.r(2f) }, { Ui.r(1.5f) }, { Ui.r(0.375f) }, { if (onLight(toast)) 0x40000000 else 0x26000000 })
@@ -121,7 +124,20 @@ class HomeActivity : Activity() {
         main.postDelayed({ if (!sceneUp) { sceneUp = true; if (riseWaiting) { riseWaiting = false; comeBack() } } }, 2500)
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
 
-        Glass.listeners.add { dock.invalidateGlass(); shelf.invalidateGlass(); tab.invalidate(); np.invalidate(); toast.invalidate() }
+        Glass.listeners.add { dock.invalidateGlass(); shelf.invalidateGlass(); tab.invalidate(); vpn.invalidate(); np.invalidate(); toast.invalidate() }
+        // the VPN pill keeps to the tab's side, whatever the tab is doing
+        root.viewTreeObserver.addOnPreDrawListener { vpn.follow(tab); true }
+        // whether a VPN is on (NordVPN): the pill shows while one is up
+        getSystemService(android.net.ConnectivityManager::class.java)?.registerNetworkCallback(
+            android.net.NetworkRequest.Builder()
+                .addTransportType(android.net.NetworkCapabilities.TRANSPORT_VPN)
+                .removeCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN).build(),
+            object : android.net.ConnectivityManager.NetworkCallback() {
+                private val up = HashSet<android.net.Network>()
+                private fun tell() { val now = synchronized(up) { up.isNotEmpty() }; main.post { vpn.on = now } }
+                override fun onAvailable(network: android.net.Network) { synchronized(up) { up.add(network) }; tell() }
+                override fun onLost(network: android.net.Network) { synchronized(up) { up.remove(network) }; tell() }
+            })
         scene.onShown = { s ->
             date.scene = s
             // the first photo is up: now the glass has something behind it, the home rises in
@@ -147,6 +163,7 @@ class HomeActivity : Activity() {
     }
 
     private var away = false
+    lateinit var vpn: VpnPill
     override fun onStop() {
         super.onStop(); away = true
         // while away the dock and the cards wait below the screen (and the corners above it), so
@@ -550,7 +567,8 @@ class HomeActivity : Activity() {
     fun glassDirty() {
         if (glassQueued) return
         glassQueued = true
-        Choreographer.getInstance().postFrameCallback { glassQueued = false; if (scene.current != null) Glass.record(listOf(scene, topShelf)) }
+        // the glass draws its frosted pictures (Glass): every piece is simply drawn again
+        Choreographer.getInstance().postFrameCallback { glassQueued = false; Glass.changed() }
     }
 
     /**

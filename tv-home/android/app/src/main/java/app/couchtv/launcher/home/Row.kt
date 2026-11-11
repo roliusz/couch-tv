@@ -112,6 +112,34 @@ class SideTab(ctx: Context, private val home: HomeActivity) : View(ctx) {
     }
 }
 
+/**
+ * The VPN symbol, right of the person tab while a VPN is on (glass.css .vpn-chip): a small round
+ * piece of the same glass with a shield and lock, white (dark over a near-white sky). It follows
+ * the tab wherever it moves (rising in, resting, growing on focus).
+ */
+class VpnPill(ctx: Context, private val home: HomeActivity) : View(ctx) {
+    private val face = Glass.Face()
+    var on = false
+        set(v) { if (v != field) { field = v; visibility = if (v) VISIBLE else GONE; (parent as? View)?.invalidate() } }
+    init { visibility = GONE }
+    override fun onMeasure(w: Int, h: Int) { val d = Ui.r(3.25f).toInt(); setMeasuredDimension(d, d) }
+    /** Lined up with the tab, a small gap to its right. */
+    fun follow(tab: View) {
+        val x = tab.left + tab.translationX + tab.width * tab.scaleX + Ui.r(0.625f)
+        val y = tab.top + tab.translationY + (tab.height - height) / 2f
+        if (translationX != x - left || translationY != y - top || alpha != tab.alpha) {
+            translationX = x - left; translationY = y - top; alpha = tab.alpha; invalidate()
+        }
+    }
+    override fun onDraw(c: Canvas) {
+        val w = width.toFloat(); val h = height.toFloat()
+        val loc = IntArray(2); getLocationOnScreen(loc)
+        face.draw(c, w, h, h / 2, loc[0].toFloat(), loc[1].toFloat(), if (home.onLight(this)) Glass.WASH_LIGHT else Glass.WASH)
+        val ink = if (home.onLight(this)) 0xFF1D1D1F.toInt() else 0xEBFFFFFF.toInt()
+        Icons.vpnLock.draw(c, w / 2 - Ui.r(0.8125f), h / 2 - Ui.r(0.8125f), Ui.r(1.625f), ink, 1.7f)
+    }
+}
+
 /** The glass bubble that drops in at the top with a message, and slides away by itself. */
 class ToastView(ctx: Context) : View(ctx) {
     var home: HomeActivity? = null

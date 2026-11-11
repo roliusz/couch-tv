@@ -23,9 +23,9 @@ class TopShelf(ctx: Context, private val home: HomeActivity) : View(ctx) {
     private var meta = ""
     var showing = false; private set
     var thumb: Bitmap? = null
-    private val shown = Spring(0f, 0.002f) { on = it; visibility = if (it <= 0.001f) INVISIBLE else VISIBLE; home.date.alpha = 1f - it; invalidate(); home.glassDirty() }
+    private val shown = Spring(0f, 0.002f) { on = it; Glass.shelfOn = it; visibility = if (it <= 0.001f) INVISIBLE else VISIBLE; home.date.alpha = 1f - it; invalidate(); home.glassDirty() }
     private val info = Spring(0f, 0.002f) { infoT = it; invalidate() }
-    private val cross = Spring(1f, 0.002f) { picT = it; invalidate(); home.glassDirty() }
+    private val cross = Spring(1f, 0.002f) { picT = it; Glass.shelfT = it; invalidate(); home.glassDirty() }
     private val p = Paint(Paint.FILTER_BITMAP_FLAG)
     private val shadeH = Paint(); private val shadeV = Paint()
     private val titleP = Ui.paint(Ui.interBold, 4.75f).apply { setShadowLayer(Ui.r(1.5f), 0f, Ui.r(0.125f), 0x73000000) }
@@ -46,8 +46,11 @@ class TopShelf(ctx: Context, private val home: HomeActivity) : View(ctx) {
         val u = want ?: return; val s = card ?: return
         home.io.execute {
             val b = Net.bitmap(context, u, 1280)?.let { if (it.config == Bitmap.Config.HARDWARE) it.copy(Bitmap.Config.ARGB_8888, false) ?: it else it }
+            val frosted = b?.let { try { Glass.frostShelf(it) } catch (e: Throwable) { null } }
             post {
                 if (want != u || b == null) return@post
+                // the glass over it: the show's frosted artwork, crossfading with the last one
+                Glass.shelfOld = if (showing) Glass.shelfNow else null; Glass.shelfNow = frosted
                 title = s.title
                 val ep = if (s.season > 0 && s.episode > 0) "S${s.season}, E${s.episode}" else ""
                 meta = listOf(if (s.next) L.t("up_next") else "", ep, s.episodeTitle ?: "", s.app?.name ?: "").filter { it.isNotEmpty() }.joinToString(" · ")
@@ -63,7 +66,7 @@ class TopShelf(ctx: Context, private val home: HomeActivity) : View(ctx) {
         removeCallbacks(wait); want = null
         if (!showing) return
         showing = false; shown.to(0f, 0.6f); info.to(0f, 0.3f)
-        postDelayed({ if (!showing) { pics = arrayOfNulls(2) } }, 900)
+        postDelayed({ if (!showing) { pics = arrayOfNulls(2); Glass.shelfNow = null; Glass.shelfOld = null } }, 900)
     }
 
     fun paintInto(c: Canvas) = onDraw(c)
