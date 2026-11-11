@@ -240,7 +240,17 @@
     qp_settings: "Settings",
     qp_need_key: "Changing this needs the TV's IP control key (sony-psk.txt).",
     qp_no_bar: "The soundbar isn't answering.",
-    qp_failed: "The TV didn't take that change."
+    qp_failed: "The TV didn't take that change.",
+    qp_title: "Quick Settings",
+    qp_audio_output: "Audio output",
+    qp_audio_system: "Audio system",
+    qp_sub_vol: "Subwoofer volume",
+    qp_rear_vol: "Rear volume",
+    qp_night_mode: "Night mode",
+    qp_voice_mode: "Voice mode",
+    qp_picture_mode: "Picture mode",
+    qp_on: "On",
+    qp_max: "Max"
   };
 
   S.es = {
@@ -465,7 +475,17 @@
     qp_settings: "Ajustes",
     qp_need_key: "Para cambiar esto hace falta la clave de control IP del televisor (sony-psk.txt).",
     qp_no_bar: "La barra de sonido no responde.",
-    qp_failed: "El televisor no aceptó el cambio."
+    qp_failed: "El televisor no aceptó el cambio.",
+    qp_title: "Ajustes rápidos",
+    qp_audio_output: "Salida de audio",
+    qp_audio_system: "Sistema de audio",
+    qp_sub_vol: "Volumen del subwoofer",
+    qp_rear_vol: "Volumen trasero",
+    qp_night_mode: "Modo nocturno",
+    qp_voice_mode: "Modo voz",
+    qp_picture_mode: "Modo de imagen",
+    qp_on: "Sí",
+    qp_max: "Máx."
   };
 
   // Only what Mexico says differently; everything else comes from es.

@@ -124,6 +124,12 @@ object Icons {
     fun of(svg: String) = cache.getOrPut(svg) { Icon(svg) }
     val screen get() = of("""<svg viewBox="0 0 24 24"><rect x="2.5" y="3.5" width="19" height="13" rx="2"/><path d="M9 20.5h6M12 16.5v4"/></svg>""")
     val speaker get() = of("""<svg viewBox="0 0 24 24"><rect x="2.5" y="9" width="19" height="6" rx="2"/><circle class="fill" cx="7" cy="12" r="1"/><circle class="fill" cx="12" cy="12" r="1"/><circle class="fill" cx="17" cy="12" r="1"/></svg>""")
+    val qsOutput get() = of("""<svg viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><circle cx="12" cy="14.5" r="3.2"/><circle class="fill" cx="12" cy="7" r="1.2"/></svg>""")
+    val qsVolume get() = of("""<svg viewBox="0 0 24 24"><path class="fill" d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>""")
+    val qsNight get() = of("""<svg viewBox="0 0 24 24"><path d="M19 15a8 8 0 1 1-9.5-10.5A6.5 6.5 0 0 0 19 15z"/><path d="M16 3.5v5.5"/><circle class="fill" cx="14.8" cy="9.2" r="1.4"/></svg>""")
+    val qsVoice get() = of("""<svg viewBox="0 0 24 24"><path d="M4 5.5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5l-4 3.5v-3.5H6a2 2 0 0 1-2-2z"/><path d="M13 7v5.5"/><circle class="fill" cx="11.6" cy="12.6" r="1.5"/></svg>""")
+    val qsScene get() = of("""<svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" class="fill"/></svg>""")
+    val qsLink get() = of("""<svg viewBox="0 0 24 24" class="solid"><path d="M14 5.5l7 6-7 6v-3.6c-5 0-8.3 1.5-11 5.1 1-5.2 4-9.6 11-10.6z"/></svg>""")
     val moon get() = of("""<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>""")
     val picture get() = of("""<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" class="fill"/></svg>""")
     val more get() = of("""<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg>""")
