@@ -541,7 +541,7 @@ class HomeActivity : Activity() {
      * Over a near-white background the words on the glass turn dark (adapt.js): the lightness of
      * the picture behind a piece, with a gap between the two thresholds so it never flickers.
      */
-    private val lightNow = HashMap<View, Boolean>()
+    private val lightNow = HashMap<View, Pair<Bitmap, Boolean>>()
     fun onLight(v: View): Boolean {
         val src = (if (topShelf.showing) topShelf.thumb else scene.thumb) ?: return false
         val loc = IntArray(2); v.getLocationOnScreen(loc)
@@ -555,10 +555,12 @@ class HomeActivity : Activity() {
         }
         val yy = sum / maxOf(1, n)
         val l = (if (yy > 0.008856) 116 * Math.cbrt(yy) - 16 else 903.3 * yy) / 100
-        // adapt.js: dark words only over a near-white sky (the shadow keeps the glass's shape elsewhere)
-        val was = lightNow[v] ?: false
+        // adapt.js: dark words only over a near-white sky (the shadow keeps the glass's shape elsewhere).
+        // The margin (0.82 to stay dark, 0.86 to turn dark) only stops flicker over one picture: a new
+        // picture decides afresh, or a pale sky before it (fog) keeps the words dark over Algarve's 0.84.
+        val was = lightNow[v]?.takeIf { it.first === src }?.second ?: false
         val now = if (was) l > 0.82 else l > 0.86
-        lightNow[v] = now
+        lightNow[v] = src to now
         return now
     }
 
