@@ -31,7 +31,8 @@ class QuickActivity : Activity() {
         Sony.findBar(this)
         load()
     }
-    override fun onNewIntent(intent: Intent?) { super.onNewIntent(intent); load() }
+    // the hamburger key again while it is open closes it, as Sony's gear does
+    override fun onNewIntent(intent: Intent?) { super.onNewIntent(intent); if (panel.isOpen) panel.close() else load() }
     private val ha by lazy { Ha(this) }
     fun load() {
         Sony.read(this) { s -> panel.show(s) }
@@ -119,6 +120,12 @@ class QuickPanel(private val act: QuickActivity) : View(act) {
     private var scroll = 0f
     private val scr = Spring(0f) { scroll = it; invalidate() }
     private val msgFade = Spring(0f, 0.002f) { msgA = it; invalidate() }
+    // the chosen tile's list: where it has rolled to (in rows), and how far it has faded in
+    private var lpos = 0f
+    private val lp = Spring(0f, 0.001f) { lpos = it; invalidate() }
+    private var listA = 0f
+    private val listFade = Spring(0f, 0.002f) { listA = it; invalidate() }
+    private fun target(tl: Tile): Float = tl.number?.let { (it.max - it.value).toFloat() } ?: tl.at.toFloat()
 
     private val BAR = 0xFF141414.toInt(); private val COL = 0xFF1F1F1F.toInt()
     private val BLUE = 0xFF3D95F2.toInt(); private val BAND = 0xFF0A63D1.toInt()
@@ -140,8 +147,9 @@ class QuickPanel(private val act: QuickActivity) : View(act) {
         s = st; build()
         if (closing) return
         if (open.t == 0f) open.to(1f, 0.42f)
-        scr.snap(fi.toFloat()); requestFocus(); invalidate()
+        scr.snap(fi.toFloat()); tiles.getOrNull(fi)?.let { lp.snap(target(it)) }; listFade.to(1f, 0.4f); requestFocus(); invalidate()
     }
+    val isOpen get() = open.t > 0f && !closing
     fun close() {
         if (closing) return
         closing = true
@@ -269,23 +277,24 @@ class QuickPanel(private val act: QuickActivity) : View(act) {
         if (tiles.isEmpty() || closing) return e.keyCode in NAV
         val tl = tiles[fi]
         when (e.keyCode) {
-            KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> close()
+            KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_SETTINGS -> close()
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 val dx = if (e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1
                 fi = (fi + dx + tiles.size) % tiles.size
                 pickCurrent(tiles[fi])
-                scr.to(scr.t + dx, 0.3f)   // the strip moves on one tile per press, however quick; round and round
+                lp.snap(target(tiles[fi])); listFade.snap(0f); listFade.to(1f, 0.45f)
+                scr.to(scr.t + dx, 0.38f)   // the strip moves on one tile per press, however quick; round and round
             }
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> {
                 val up = e.keyCode == KeyEvent.KEYCODE_DPAD_UP
                 val n = tl.number
                 if (n != null) {
                     if (tl.dim()) { say(L.t("qp_need_key")); return true }
-                    n.value = (n.value + if (up) 1 else -1).coerceIn(n.min, n.max); invalidate()
+                    n.value = (n.value + if (up) 1 else -1).coerceIn(n.min, n.max); lp.to(target(tl), 0.3f); invalidate()
                     sendRun?.let { removeCallbacks(it) }
                     sendRun = Runnable { tl.send(n.value.toString()) }.also { postDelayed(it, 400) }   // several presses send one change
                 } else if (tl.options.isNotEmpty()) {
-                    tl.at = (tl.at + if (up) -1 else 1).coerceIn(0, tl.options.size - 1); invalidate()
+                    tl.at = (tl.at + if (up) -1 else 1).coerceIn(0, tl.options.size - 1); lp.to(target(tl), 0.3f); invalidate()
                 }
             }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
@@ -296,7 +305,7 @@ class QuickPanel(private val act: QuickActivity) : View(act) {
         }
         return true
     }
-    private val NAV = setOf(KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
+    private val NAV = setOf(KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_SETTINGS, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
         KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_BUTTON_A)
 
     override fun onDraw(c: Canvas) {
@@ -318,58 +327,58 @@ class QuickPanel(private val act: QuickActivity) : View(act) {
             val k = ((pos % n) + n) % n
             val x = cx0 + (pos - scroll) * tileW
             if (x < -tileW || x > w + tileW) continue
-            val chosen = k == fi && Math.abs(pos - scroll) < 0.5f
-            drawTile(c, tiles[k], x, top, chosen, 1f - Math.min(1f, Math.abs(pos - scroll)))
+            val near = 1f - Math.min(1f, Math.abs(pos - scroll))
+            drawTile(c, tiles[k], x, top, k == fi && pos == Math.round(scr.t), near)
         }
         c.restore()
     }
 
+    private fun ease(x: Float) = x * x * (3 - 2 * x)
+
     private fun drawTile(c: Canvas, tl: Tile, cx: Float, top: Float, chosen: Boolean, near: Float) {
         val h = height.toFloat()
-        val up = if (chosen) lift * near.coerceIn(0f, 1f) else 0f
-        val y0 = top - up
-        if (chosen) { fill.color = COL; c.drawRect(cx - tileW / 2, y0, cx + tileW / 2, h, fill) }
+        val f = ease(near.coerceIn(0f, 1f))
+        // the raised, lighter column glides with the strip from tile to tile
+        val y0 = top - lift * f
+        if (f > 0.001f) { fill.color = Ui.mix(BAR, COL, f); c.drawRect(cx - tileW / 2, y0, cx + tileW / 2, h, fill) }
         val a = if (tl.dim()) 0.45f else 1f
         tl.icon.draw(c, cx - Ui.r(1.5f), y0 + Ui.r(1.375f), Ui.r(3f), Ui.alpha(Color.WHITE, a), 1.9f)
         nameP.color = Ui.alpha(Color.WHITE, a)
         c.drawText(Ui.fit(nameP, tl.title, tileW - Ui.r(1.5f)), cx, y0 + Ui.r(6.875f), nameP)
-        var y = y0 + Ui.r(6.875f)
-        tl.sub?.let { subP.alpha = (176 * a).toInt(); c.drawText(it, cx, y0 + Ui.r(9.3f), subP); y = y0 + Ui.r(9.3f) }
+        tl.sub?.let { subP.alpha = (176 * a).toInt(); c.drawText(it, cx, y0 + Ui.r(9.3f), subP) }
 
-        if (!chosen) {
-            if (tl.link) Icons.qsLink.draw(c, cx - Ui.r(0.875f), top + Ui.r(11.2f), Ui.r(1.75f), Ui.alpha(BLUE, a))
-            else { valP.color = Ui.alpha(BLUE, a); c.drawText(Ui.fit(valP, tl.value(), tileW - Ui.r(1.5f)), cx, top + Ui.r(12.4f), valP) }
-            return
+        // the value fades out as the chosen tile's list fades in
+        val show = if (chosen) listA * f else 0f
+        if (show < 1f) {
+            val va = a * (1f - show)
+            if (tl.link) Icons.qsLink.draw(c, cx - Ui.r(0.875f), top + Ui.r(11.2f) - lift * f, Ui.r(1.75f), Ui.alpha(BLUE, va))
+            else { valP.color = Ui.alpha(BLUE, va); c.drawText(Ui.fit(valP, tl.value(), tileW - Ui.r(1.5f)), cx, top + Ui.r(12.4f), valP) }
         }
-        // the chosen tile's list: the highlighted choice in a blue band in the middle of the
-        // window, its neighbours above and below (numbers: the next one up above, as Sony)
+        if (show <= 0.001f) return
+        val hasList = tl.number != null || tl.options.isNotEmpty() || !tl.link
+        if (!hasList) return
+        // the list: a still blue band in the middle, the choices rolling through it (numbers: the
+        // next one up above, as Sony); each one whiter the closer it is to the band
         val listTop = y0 + Ui.r(11f)
         val mid = listTop + rowH * 1.5f
         c.save(); c.clipRect(cx - tileW / 2, listTop, cx + tileW / 2, h)
+        fill.color = Ui.alpha(BAND, show); c.drawRect(cx - tileW / 2, mid - rowH / 2, cx + tileW / 2, mid + rowH / 2, fill)
+        fun row(label: String, at: Float) {
+            val d = at - lpos
+            if (Math.abs(d) > 2.6f) return
+            val close = (1f - Math.min(1f, Math.abs(d))).coerceIn(0f, 1f)
+            optP.color = Ui.alpha(Ui.mix(BLUE, Color.WHITE, close), a * show)
+            c.drawText(Ui.fit(optP, label, tileW - Ui.r(1.5f)), cx, mid + d * rowH + optP.textSize * 0.36f, optP)
+        }
         val nb = tl.number
         if (nb != null) {
-            fill.color = BAND; c.drawRect(cx - tileW / 2, mid - rowH / 2, cx + tileW / 2, mid + rowH / 2, fill)
-            for (d in -1..1) {
-                val v = nb.value - d
-                if (v < nb.min || v > nb.max) continue
-                optP.color = if (d == 0) Ui.alpha(Color.WHITE, a) else Ui.alpha(BLUE, a)
-                val label = if (v >= nb.max && nb.max > 0) L.t("qp_max") else v.toString()
-                c.drawText(label, cx, mid + d * rowH + optP.textSize * 0.36f, optP)
-            }
+            val lo = maxOf(nb.min, nb.value - 4); val hi = minOf(nb.max, nb.value + 4)
+            for (v in lo..hi) row(if (v >= nb.max && nb.max > 0) L.t("qp_max") else v.toString(), (nb.max - v).toFloat())
         } else if (tl.options.isNotEmpty()) {
-            fill.color = BAND; c.drawRect(cx - tileW / 2, mid - rowH / 2, cx + tileW / 2, mid + rowH / 2, fill)
-            for ((k, o) in tl.options.withIndex()) {
-                val d = k - tl.at
-                if (Math.abs(d) > 2) continue
-                optP.color = if (d == 0) Ui.alpha(Color.WHITE, a) else Ui.alpha(BLUE, a)
-                c.drawText(Ui.fit(optP, o, tileW - Ui.r(1.5f)), cx, mid + d * rowH + optP.textSize * 0.36f, optP)
-            }
-        } else if (!tl.link) {
-            fill.color = BAND; c.drawRect(cx - tileW / 2, mid - rowH / 2, cx + tileW / 2, mid + rowH / 2, fill)
-            optP.color = Ui.alpha(Color.WHITE, a)
-            c.drawText(Ui.fit(optP, tl.value(), tileW - Ui.r(1.5f)), cx, mid + optP.textSize * 0.36f, optP)
+            for ((k, o) in tl.options.withIndex()) row(o, k.toFloat())
         } else {
-            Icons.qsLink.draw(c, cx - Ui.r(0.875f), top + Ui.r(11.2f), Ui.r(1.75f), Ui.alpha(BLUE, a))
+            optP.color = Ui.alpha(Color.WHITE, a * show)
+            c.drawText(Ui.fit(optP, tl.value(), tileW - Ui.r(1.5f)), cx, mid + optP.textSize * 0.36f, optP)
         }
         c.restore()
     }

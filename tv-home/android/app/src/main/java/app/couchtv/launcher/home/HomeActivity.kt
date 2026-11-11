@@ -74,6 +74,7 @@ class HomeActivity : Activity() {
         Ui.init(this)
         app.couchtv.launcher.Doorbell.start(this)   // the door camera over whatever is on, when someone rings
         app.couchtv.launcher.NowOverlay.start(this)   // the music card over ambient mode
+        app.couchtv.launcher.RemoteSync.start(this)   // the Remote 3's TV activity on and off with the TV
         store = Store(this).also { it.load() }
         L.load(this); L.set(store.st.optString("lang").ifEmpty { store.home.optString("language", "en") })
         apps = Apps(this, store)
@@ -193,7 +194,7 @@ class HomeActivity : Activity() {
     override fun onNewIntent(i: Intent?) {
         super.onNewIntent(i)
         endRest()
-        if (i != null && (i.hasExtra("config_b64") || i.hasExtra("ha_b64") || i.hasExtra("trakt_b64") || i.hasExtra("sony_b64"))) { app.couchtv.launcher.storeExtras(this, i); restart() }
+        if (i != null && (i.hasExtra("config_b64") || i.hasExtra("ha_b64") || i.hasExtra("trakt_b64") || i.hasExtra("sony_b64") || i.hasExtra("uc_b64"))) { app.couchtv.launcher.storeExtras(this, i); restart() }
         // Home pressed while the home is in front: back to the start
         if (zone == "side") side.close(false)
         if (zone == "hpanel") panel.close()

@@ -1102,6 +1102,14 @@ fun storeExtras(ctx: android.content.Context, i: Intent) {
                 if (JSONObject(json).optString("api_key").isNotEmpty()) e.putString("tmdb", json)
             } catch (x: Exception) {}
         }
+        // fork: the Remote 3 (uc-remote.json: host, api_key, activity) that follows the TV (RemoteSync.kt)
+        i.getStringExtra("uc_b64")?.let {
+            try {
+                val json = String(android.util.Base64.decode(it, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                val o = JSONObject(json)
+                if (o.optString("host").isNotEmpty() && o.optString("api_key").isNotEmpty() && o.optString("activity").isNotEmpty()) e.putString("uc", json)
+            } catch (x: Exception) {}
+        }
         // fork: the TV's IP control key (sony-psk.txt), for quick settings' changes (home/Sony.kt)
         i.getStringExtra("sony_b64")?.let {
             try {

@@ -44,6 +44,7 @@ ha-token.txt
 trakt.json
 tmdb.json
 sony-psk.txt
+uc-remote.json
 
 # fork: the household's own avatar pictures
 tv-home/web/avatars/
