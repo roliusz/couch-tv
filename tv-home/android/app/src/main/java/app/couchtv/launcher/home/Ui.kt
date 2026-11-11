@@ -209,6 +209,19 @@ object Glass {
     const val RIM = 0x66FFFFFF
 
     fun changed() = listeners.forEach { it() }
+    /**
+     * Where a glass piece's glass lines up with the screen: where it is now sideways, but up and
+     * down where it comes to rest. Rising in (coming back to the home, waking from rest) a piece
+     * then carries its own glass with it, instead of showing the darker photo further down on the
+     * way and lightening as it arrives.
+     */
+    fun settled(v: android.view.View): IntArray {
+        val loc = IntArray(2); v.getLocationOnScreen(loc)
+        var p: android.view.View? = v; var dy = 0f
+        while (p != null) { dy += p.translationY; p = p.parent as? android.view.View }
+        loc[1] -= dy.toInt()
+        return loc
+    }
 
     /**
      * The live glass: what is behind it (the scene, or a show's artwork) recorded at a quarter of

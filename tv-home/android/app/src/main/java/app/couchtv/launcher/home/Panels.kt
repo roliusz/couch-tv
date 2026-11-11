@@ -224,7 +224,7 @@ class NowPlayingCard(ctx: Context, private val home: HomeActivity) : View(ctx) {
         val ink = if (light) 0xFF1D1D1F.toInt() else Color.WHITE
         val ink2 = if (light) 0x80000000.toInt() else 0x8CFFFFFF.toInt()
         title.color = ink; artist.color = ink2; where.color = ink2; time.color = ink2
-        val loc = IntArray(2); getLocationOnScreen(loc)
+        val loc = Glass.settled(this)
         face.draw(c, w, h, Ui.r(2.25f), loc[0].toFloat(), loc[1].toFloat(), if (light) Glass.WASH_LIGHT else Glass.WASH)
         val pad = Ui.r(1.25f); val a = Ui.r(5.5f)
         // artwork

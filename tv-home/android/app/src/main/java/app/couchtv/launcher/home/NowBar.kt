@@ -70,7 +70,7 @@ class NowBar(ctx: Context, private val home: HomeActivity?) : View(ctx) {
         val w = width.toFloat(); val h = height.toFloat(); val rad = Ui.r(2.75f)
         val hm = home
         if (hm != null) {
-            val loc = IntArray(2); getLocationOnScreen(loc)
+            val loc = Glass.settled(this)
             face.draw(c, w, h, rad, loc[0].toFloat(), loc[1].toFloat())
         } else {
             // over ambient: a dark glass with the same light edge

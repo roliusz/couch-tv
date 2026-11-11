@@ -133,7 +133,7 @@ class CardView(ctx: Context, var show: Show, private val shows: Shows, private v
     override fun onDraw(c: Canvas) {
         val w = width.toFloat(); val h = height.toFloat()
         if (homeDraw != null) {
-            val loc = IntArray(2); getLocationOnScreen(loc)   // where it is now, grown and moved
+            val loc = Glass.settled(this)   // where it is, sideways as it is now; up and down where it comes to rest
             face.draw(c, w, h, rad, loc[0].toFloat(), loc[1].toFloat(), Ui.mix(Glass.WASH, Glass.WASH_FOCUS, focusT), s = scaleX)
             homeDraw.invoke(c, this)
             return

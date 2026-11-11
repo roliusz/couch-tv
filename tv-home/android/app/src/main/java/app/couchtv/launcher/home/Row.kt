@@ -95,7 +95,7 @@ class SideTab(ctx: Context, private val home: HomeActivity) : View(ctx) {
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) { pivotY = height / 2f }
     override fun onDraw(c: Canvas) {
         val w = width.toFloat(); val h = height.toFloat(); val rad = h / 2
-        val loc = IntArray(2); getLocationOnScreen(loc)
+        val loc = Glass.settled(this)
         face.draw(c, w, h, rad, loc[0].toFloat(), loc[1].toFloat(), if (home.onLight(this)) Glass.WASH_LIGHT else Glass.WASH, s = scaleX)
         if (focusT > 0f) { bg.color = Ui.alpha(if (home.onLight(this)) 0xFF1D1D1F.toInt() else Color.WHITE, focusT); c.drawRoundRect(0f, 0f, w, h, rad, rad, bg) }
         val light = home.onLight(this)
@@ -133,7 +133,7 @@ class VpnPill(ctx: Context, private val home: HomeActivity) : View(ctx) {
     }
     override fun onDraw(c: Canvas) {
         val w = width.toFloat(); val h = height.toFloat()
-        val loc = IntArray(2); getLocationOnScreen(loc)
+        val loc = Glass.settled(this)
         face.draw(c, w, h, h / 2, loc[0].toFloat(), loc[1].toFloat(), if (home.onLight(this)) Glass.WASH_LIGHT else Glass.WASH)
         val ink = if (home.onLight(this)) 0xFF1D1D1F.toInt() else 0xEBFFFFFF.toInt()
         Icons.vpnLock.draw(c, w / 2 - Ui.r(0.8125f), h / 2 - Ui.r(0.8125f), Ui.r(1.625f), ink, 1.7f)
@@ -157,7 +157,7 @@ class ToastView(ctx: Context) : View(ctx) {
     }
     override fun onMeasure(w: Int, h: Int) = setMeasuredDimension((p.measureText(text) + Ui.r(4f)).toInt().coerceAtLeast(1), Ui.ri(4.125f))
     override fun onDraw(c: Canvas) {
-        val loc = IntArray(2); getLocationOnScreen(loc)
+        val loc = Glass.settled(this)
         val light = home?.onLight(this) == true
         face.draw(c, width.toFloat(), height.toFloat(), Ui.r(2f), loc[0].toFloat(), loc[1].toFloat(), if (light) Glass.WASH_LIGHT else Glass.WASH)
         p.color = if (light) 0xFF1D1D1F.toInt() else Color.WHITE
