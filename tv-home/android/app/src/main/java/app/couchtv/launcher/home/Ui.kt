@@ -148,6 +148,8 @@ object Glass {
         }
         val node = inner ?: android.graphics.RenderNode("glass-blur").also { n ->
             n.setPosition(0, 0, w, h)
+            // its own layer: on this TV the blur is only applied to a node that has one
+            n.setUseCompositingLayer(true, null)
             val sat = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(1.5f) })
             n.setRenderEffect(android.graphics.RenderEffect.createChainEffect(
                 android.graphics.RenderEffect.createColorFilterEffect(sat),
@@ -169,13 +171,7 @@ object Glass {
         val outer = live!!
         val oc = outer.beginRecording(w, h)
         try { oc.drawRenderNode(node) } finally { outer.endRecording() }
-        if (first) {
-            first = false; views.firstOrNull()?.rootView?.let { invalidateAll(it) }
-            // the very first recording comes out unblurred on this TV until it is recorded again (the
-            // cards rose in with sharp glass that only frosted 1.8 s later): once more, two frames on
-            val again = views.toList()
-            android.view.Choreographer.getInstance().postFrameCallback { android.view.Choreographer.getInstance().postFrameCallback { record(again) } }
-        }
+        if (first) { first = false; views.firstOrNull()?.rootView?.let { invalidateAll(it) } }
         changed()
     }
 

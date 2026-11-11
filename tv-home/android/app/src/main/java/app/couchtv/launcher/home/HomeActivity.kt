@@ -168,7 +168,7 @@ class HomeActivity : Activity() {
             if (sceneUp) afterTwoFrames { comeBack() } else riseWaiting = true
         }
         away = false
-        glassDirty(); main.postDelayed({ glassDirty() }, 400); main.postDelayed({ glassDirty() }, 1800)
+        glassDirty()
         Trakt.onChange = { main.post { refresh(); settings?.traktChanged() } }
         WatchLog.onChange = { main.post { refresh() } }
         refresh(); refreshWeather(); askRoom()

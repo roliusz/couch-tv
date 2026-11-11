@@ -247,7 +247,10 @@ class SceneView(ctx: Context) : View(ctx) {
     private fun drawScene(c: Canvas, s: Shown, a: Float, glideFrom: Shown? = null, glideTo: Shown? = null) {
         val sc = s.scene
         val dim = (if (night) 0.72f else 1f) * sc.photoDim
-        val hw = c.isHardwareAccelerated && width > 0
+        // the glass draws the photo itself, never the screen's kept textures: those are rebuilt
+        // after the home has been away, and the glass would copy them half made (greyer, then
+        // right a moment later)
+        val hw = c.isHardwareAccelerated && width > 0 && !forGlass
         if (hw) s.photoKey = node(c, s.photoNode, "$dim|$width", s.photoKey, a) { drawPhoto(it, s, 1f, dim) }
         else drawPhoto(c, s, a, dim)
         if (time.isNotEmpty()) {
