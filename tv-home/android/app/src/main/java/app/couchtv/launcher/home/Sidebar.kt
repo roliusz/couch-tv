@@ -89,14 +89,31 @@ class Sidebar(ctx: Context, private val home: HomeActivity) : View(ctx) {
     private fun focusable() = rows().filter { it.kind != null }
 
     private var grabbing = false
-    // the scene and a show's artwork behind it change while it is open: it is drawn again
-    init { Glass.listeners.add { if (open > 0f) invalidate() } }
+    // The glass shows what is really behind it (the scene, the cards, the dock), frosted as every
+    // glass is: a picture of the home taken as it opens, and again whenever the scene or a show's
+    // artwork changes while it is open, the new one fading in over the last.
+    private var back: Bitmap? = null
+    private var next: Bitmap? = null
+    private var mixT = 0f
+    private val mixer = Spring(0f, 0.002f) { mixT = it; invalidate(); if (it >= 0.999f && next != null) { back = next; next = null; mixT = 0f } }
+    private fun behind() = listOf<View>(home.scene, home.topShelf, home.date, home.shelf, home.dock, home.np)   // (the person tab steps aside)
+    private var snapping = false
+    private fun snap(done: (Bitmap?) -> Unit) {
+        val raw = Glass.snapshot(behind()) ?: run { done(null); return }
+        home.io.execute { val f = try { Glass.frostSnapshot(raw) } catch (e: Throwable) { null }; home.main.post { done(f) } }
+    }
+    private val again = Runnable {
+        if (open <= 0f || snapping) return@Runnable
+        snapping = true
+        snap { f -> snapping = false; if (f != null && open > 0f) { if (back == null) back = f else { next = f; mixT = 0f; mixer.snap(0f); mixer.to(1f, 0.4f) } } }
+    }
+    init { Glass.listeners.add { if (open > 0f) { removeCallbacks(again); postDelayed(again, 120) } } }
     fun open() {
         if (home.zone == "side" || grabbing) return
         from = home.zone; if (show == null || level != "app") { level = "main"; i = 0 }
-        // the sidebar's glass is the same frosted scene as every piece (brightness 0.82, sidebar.css),
-        // so it follows the scene and a show's artwork changing behind it while open
-        run {
+        grabbing = true
+        snap { f ->
+            grabbing = false; back = f; next = null; mixT = 0f
             home.zone = "side"; home.paint()
             // the person tab steps aside: the panel reads as the tab growing into it (sidebar.css)
             home.tab.animate().alpha(0f).setDuration(260).setUpdateListener { home.root.invalidate() }.start()
@@ -164,7 +181,7 @@ class Sidebar(ctx: Context, private val home: HomeActivity) : View(ctx) {
         val ph = h - 2 * py
         c.save(); c.translate(px, py)
         if (grad == null) grad = LinearGradient(0f, 0f, 0f, ph, intArrayOf(0x17FFFFFF, 0x08FFFFFF, 0x05FFFFFF, 0x0DFFFFFF), floatArrayOf(0f, 0.3f, 0.75f, 1f), Shader.TileMode.CLAMP)
-        face.draw(c, pw, ph, Ui.r(3.375f), px, py, 0x4D16141A, dim = 0.18f, gradient = grad)
+        face.draw(c, pw, ph, Ui.r(3.375f), px, py, 0x4D16141A, backdrop = back, gradient = grad, backdrop2 = next, mix = mixT)
         val all = rows(); var k = 0
         var y = Ui.r(1.5f); val x = Ui.r(1.5f); val rw = pw - 2 * x
         all.forEachIndexed { n, r ->

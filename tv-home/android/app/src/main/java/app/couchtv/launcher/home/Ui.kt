@@ -143,6 +143,45 @@ object Glass {
         c.drawRect(0f, h * 0.6f, w.toFloat(), h.toFloat(), Paint().apply { shader = LinearGradient(0f, h * 0.6f, 0f, h.toFloat(), 0, 0x80000000.toInt(), Shader.TileMode.CLAMP) })
         return finish(out)
     }
+    /**
+     * What the given pieces of the home look like right now, drawn off screen at a quarter size by
+     * the graphics chip and read back, then frosted here like every glass (no chip blur): the
+     * sidebar's backdrop, so the cards and the dock show through it as well as the scene.
+     */
+    private var snapR: android.graphics.HardwareRenderer? = null
+    private var snapReader: android.media.ImageReader? = null
+    private val snapNode = android.graphics.RenderNode("glass-snap")
+    fun snapshot(views: List<android.view.View>): Bitmap? = try {
+        val w = Ui.width / 4; val h = Ui.height / 4
+        val reader = snapReader ?: android.media.ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2,
+            android.hardware.HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE or android.hardware.HardwareBuffer.USAGE_GPU_COLOR_OUTPUT).also { snapReader = it }
+        val r = snapR ?: android.graphics.HardwareRenderer().also { it.setSurface(reader.surface); it.setContentRoot(snapNode); snapR = it }
+        snapNode.setPosition(0, 0, w, h)
+        val c = snapNode.beginRecording(w, h)
+        try {
+            c.drawColor(Color.BLACK); c.scale(0.25f, 0.25f)
+            for (v in views) {
+                if (v.visibility != android.view.View.VISIBLE || v.alpha <= 0f) continue
+                val n = c.save()
+                c.translate(v.left + v.translationX, v.top + v.translationY)
+                c.scale(v.scaleX, v.scaleY, v.pivotX, v.pivotY)
+                if (v.alpha < 1f) c.saveLayerAlpha(0f, 0f, v.width.toFloat(), v.height.toFloat(), (255 * v.alpha).toInt())
+                when (v) { is SceneView -> v.paintInto(c); is TopShelf -> v.paintInto(c); else -> v.draw(c) }
+                c.restoreToCount(n)
+            }
+        } finally { snapNode.endRecording() }
+        r.createRenderRequest().setWaitForPresent(true).syncAndDraw()
+        val img = reader.acquireLatestImage()
+        try {
+            val hb = img?.hardwareBuffer ?: throw IllegalStateException("no frame")
+            val wrapped = Bitmap.wrapHardwareBuffer(hb, ColorSpace.get(ColorSpace.Named.SRGB))
+            val out = wrapped?.copy(Bitmap.Config.ARGB_8888, true)
+            hb.close(); out
+        } finally { img?.close() }
+    } catch (e: Throwable) { null }
+    /** The snapshot frosted as the glass is (on a background thread). */
+    fun frostSnapshot(b: Bitmap): Bitmap = finish(b)
+
     /** A show's frosted artwork for the top shelf: cover, its two shades, blurred and saturated. */
     fun frostShelf(art: Bitmap): Bitmap {
         val w = Ui.width / 4; val h = Ui.height / 4
@@ -297,11 +336,15 @@ object Glass {
         }
         /** dx, dy: where the piece's top left corner is on the screen. */
         /** s: the piece's own zoom (a focused card grows); the glass behind it stays lined up with the screen, never magnified. */
-        fun draw(c: Canvas, w: Float, h: Float, rad: Float, dx: Float, dy: Float, washColor: Int = WASH, dim: Float = 0f, backdrop: Bitmap? = null, gradient: Shader? = null, s: Float = 1f, own: android.graphics.RenderNode? = null) {
+        fun draw(c: Canvas, w: Float, h: Float, rad: Float, dx: Float, dy: Float, washColor: Int = WASH, dim: Float = 0f, backdrop: Bitmap? = null, gradient: Shader? = null, s: Float = 1f, backdrop2: Bitmap? = null, mix: Float = 0f) {
             rr.set(0f, 0f, w, h)
             // nothing behind it yet (the first moment after start): no stand-in, no edge, nothing
             if (backdrop == null && now == null) return
-            if (backdrop != null) aFor = layer(a, backdrop, 255, c, rad, dx, dy, aFor, s)
+            if (backdrop != null) {
+                aFor = layer(a, backdrop, 255, c, rad, dx, dy, aFor, s)
+                // a newer picture of what is behind fading in over it
+                if (backdrop2 != null && mix > 0f) bFor = layer(b, backdrop2, (255 * mix).toInt(), c, rad, dx, dy, bFor, s)
+            }
             else {
                 val o = old; val n = now!!
                 if (o != null && t < 1f) { aFor = layer(a, o, 255, c, rad, dx, dy, aFor, s); bFor = layer(b, n, (255 * t).toInt(), c, rad, dx, dy, bFor, s) }

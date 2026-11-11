@@ -258,6 +258,8 @@ class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
                     val n = prems[premAt]; c.show = n; c.art = n.art?.let { arts[it] }
                     if (n.art != null && !arts.containsKey(n.art)) home.io.execute { val b = Net.bitmap(context, n.art, 640); post { if (c.show === n) c.art = b } }
                     f.to(1f, 0.35f)
+                    // resting on it: the top shelf behind the home changes to the new show too
+                    if (home.zone == "shelf" && !home.idle && focused() === c) home.topShelf.focus(n)
                 }, 350)
             }
             postDelayed(this, 30000)
