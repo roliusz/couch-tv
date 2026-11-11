@@ -8,4 +8,13 @@
         <item name="android:windowAnimationStyle">@null</item>
         <item name="android:windowDisablePreview">false</item>
     </style>
+    <!-- fork: the quick settings sheet, see-through over the app that is playing -->
+    <style name="Quick" parent="android:Theme.DeviceDefault.NoActionBar.Fullscreen">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:colorBackgroundCacheHint">@null</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
 </resources>

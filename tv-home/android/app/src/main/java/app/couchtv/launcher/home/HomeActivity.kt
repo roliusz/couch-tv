@@ -193,7 +193,7 @@ class HomeActivity : Activity() {
     override fun onNewIntent(i: Intent?) {
         super.onNewIntent(i)
         endRest()
-        if (i != null && (i.hasExtra("config_b64") || i.hasExtra("ha_b64") || i.hasExtra("trakt_b64"))) { app.couchtv.launcher.storeExtras(this, i); restart() }
+        if (i != null && (i.hasExtra("config_b64") || i.hasExtra("ha_b64") || i.hasExtra("trakt_b64") || i.hasExtra("sony_b64"))) { app.couchtv.launcher.storeExtras(this, i); restart() }
         // Home pressed while the home is in front: back to the start
         if (zone == "side") side.close(false)
         if (zone == "hpanel") panel.close()

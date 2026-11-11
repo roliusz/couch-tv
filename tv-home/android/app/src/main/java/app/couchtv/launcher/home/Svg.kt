@@ -123,6 +123,7 @@ object Icons {
     private val cache = HashMap<String, Icon>()
     fun of(svg: String) = cache.getOrPut(svg) { Icon(svg) }
     val screen get() = of("""<svg viewBox="0 0 24 24"><rect x="2.5" y="3.5" width="19" height="13" rx="2"/><path d="M9 20.5h6M12 16.5v4"/></svg>""")
+    val speaker get() = of("""<svg viewBox="0 0 24 24"><rect x="2.5" y="9" width="19" height="6" rx="2"/><circle class="fill" cx="7" cy="12" r="1"/><circle class="fill" cx="12" cy="12" r="1"/><circle class="fill" cx="17" cy="12" r="1"/></svg>""")
     val moon get() = of("""<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>""")
     val picture get() = of("""<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" class="fill"/></svg>""")
     val more get() = of("""<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg>""")

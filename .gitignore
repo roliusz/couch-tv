@@ -43,6 +43,7 @@ ha-token.txt
 # fork: the Trakt API app's ID and secret
 trakt.json
 tmdb.json
+sony-psk.txt
 
 # fork: the household's own avatar pictures
 tv-home/web/avatars/

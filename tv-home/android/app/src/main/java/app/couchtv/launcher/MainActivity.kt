@@ -1102,5 +1102,12 @@ fun storeExtras(ctx: android.content.Context, i: Intent) {
                 if (JSONObject(json).optString("api_key").isNotEmpty()) e.putString("tmdb", json)
             } catch (x: Exception) {}
         }
+        // fork: the TV's IP control key (sony-psk.txt), for quick settings' changes (home/Sony.kt)
+        i.getStringExtra("sony_b64")?.let {
+            try {
+                val k = String(android.util.Base64.decode(it, android.util.Base64.DEFAULT), Charsets.UTF_8).trim()
+                if (k.isNotEmpty() && k.length < 200) e.putString("sony_psk", k)
+            } catch (x: Exception) {}
+        }
         e.apply()
     }

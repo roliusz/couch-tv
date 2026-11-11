@@ -219,7 +219,28 @@
     kept_both: "On this TV and the computer",
     about_reset: "Reset home settings",
     about_reset_sub: "Language, place, weather, look, your photos and quick buttons go back to config.json. People and apps stay.",
-    reset_done: "Back to the settings from config.json."
+    reset_done: "Back to the settings from config.json.",
+    qp_speakers: "Speakers",
+    qp_tv_speakers: "TV speakers",
+    qp_soundbar: "Soundbar",
+    qp_inputs: "Inputs",
+    qp_all_inputs: "All inputs",
+    qp_sub: "Subwoofer",
+    qp_rear: "Rear speakers",
+    qp_night: "Night",
+    qp_voice: "Voice",
+    qp_picture: "Picture",
+    qp_mode: "Mode",
+    qp_brightness: "Brightness",
+    qp_picture_off: "Picture off",
+    qp_sleep: "Sleep timer",
+    qp_off: "Off",
+    qp_min: "{n} min",
+    qp_left: "Off in {n} min",
+    qp_settings: "Settings",
+    qp_need_key: "Changing this needs the TV's IP control key (sony-psk.txt).",
+    qp_no_bar: "The soundbar isn't answering.",
+    qp_failed: "The TV didn't take that change."
   };
 
   S.es = {
@@ -423,7 +444,28 @@
     kept_both: "En este televisor y en el ordenador",
     about_reset: "Restablecer los ajustes de inicio",
     about_reset_sub: "Idioma, lugar, tiempo, aspecto, tus fotos y botones rápidos vuelven a config.json. Los perfiles y las apps se quedan.",
-    reset_done: "Se han restablecido los ajustes de config.json."
+    reset_done: "Se han restablecido los ajustes de config.json.",
+    qp_speakers: "Altavoces",
+    qp_tv_speakers: "Altavoces del televisor",
+    qp_soundbar: "Barra de sonido",
+    qp_inputs: "Entradas",
+    qp_all_inputs: "Todas las entradas",
+    qp_sub: "Subwoofer",
+    qp_rear: "Altavoces traseros",
+    qp_night: "Noche",
+    qp_voice: "Voz",
+    qp_picture: "Imagen",
+    qp_mode: "Modo",
+    qp_brightness: "Brillo",
+    qp_picture_off: "Apagar imagen",
+    qp_sleep: "Temporizador",
+    qp_off: "No",
+    qp_min: "{n} min",
+    qp_left: "Se apaga en {n} min",
+    qp_settings: "Ajustes",
+    qp_need_key: "Para cambiar esto hace falta la clave de control IP del televisor (sony-psk.txt).",
+    qp_no_bar: "La barra de sonido no responde.",
+    qp_failed: "El televisor no aceptó el cambio."
   };
 
   // Only what Mexico says differently; everything else comes from es.
