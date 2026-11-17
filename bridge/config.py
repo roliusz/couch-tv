@@ -174,6 +174,17 @@ def person_name(pid):
 
 # ---------- the home's look ----------
 SCENE_IDS = ["night", "golden", "water", "fog", "dawn"]
+
+
+def _my_scene_ids():
+    """fork: the household's own scenes (tv-home/web/backgrounds/mine/scenes.js), which config.json
+    may list and order alongside the built-in ones."""
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tv-home", "web", "backgrounds", "mine", "scenes.js")
+    try:
+        with open(p, encoding="utf-8") as f:
+            return re.findall(r'\bid:\s*"([a-z0-9-]{1,40})"', f.read())
+    except OSError:
+        return []
 DOCK_LIMIT = 11   # apps in the dock before More apps; 11 + More spans the TV home's Keep watching row
 
 
@@ -185,7 +196,8 @@ def _int(value, default, lo, hi):
 
 def _home(h):
     h = h if isinstance(h, dict) else {}
-    scenes = [s for s in dict.fromkeys(h.get("scenes") or []) if s in SCENE_IDS] if isinstance(h.get("scenes"), list) else []
+    known = SCENE_IDS + _my_scene_ids()
+    scenes = [s for s in dict.fromkeys(h.get("scenes") or []) if s in known] if isinstance(h.get("scenes"), list) else []
     hide = h.get("hide_packages") if isinstance(h.get("hide_packages"), list) else []
     order = h.get("app_order") if isinstance(h.get("app_order"), list) else []
     return {

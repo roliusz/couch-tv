@@ -73,6 +73,10 @@ object Scenes {
     fun state(all: List<Scene>, st: org.json.JSONObject, home: org.json.JSONObject): Pair<List<String>, List<String>> {
         val ids = all.map { it.id }
         val order: MutableList<String>; val off: MutableList<String>
+        // config.json's list changed (the household's scenes, matched to the Home Assistant
+        // dashboard): start again from it once; a reordering made in Home settings after that stays
+        val sig = home.optJSONArray("scenes")?.toString() ?: ""
+        if (sig.isNotEmpty() && st.optString("scene_cfg") != sig) { st.remove("scene_order"); st.remove("scenes_off"); st.put("scene_cfg", sig) }
         val so = st.optJSONArray("scene_order")
         if (so != null) {
             order = (0 until so.length()).map { so.optString(it) }.filter { it in ids }.distinct().toMutableList()

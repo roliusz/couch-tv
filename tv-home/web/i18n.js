@@ -152,10 +152,10 @@
 
     scenes_head: "Scenes",
     scene_night: "Night",
-    scene_golden: "Golden hour",
+    scene_golden: "Golden Hour",
     scene_water: "Waterline",
     scene_fog: "Fog",
-    scene_dawn: "Rainforest dawn",
+    scene_dawn: "Dawn",
     scene_photo: "Your photo {n}",
     scene_secs: "Each scene stays",
     n_secs: "{n} seconds",
