@@ -1,0 +1,4 @@
+raindrop-fx 1.0.8, by SardineFish, MIT licence.
+Source: https://github.com/SardineFish/raindrop-fx (npm: raindrop-fx)
+The same copy the Home Assistant dashboard vendors (www/casa/vendor/raindrop-fx-1.0.8.js), so the
+TV draws the same rain. Used unchanged by ../rain.html.

@@ -32,6 +32,7 @@ class HomeActivity : Activity() {
     lateinit var scene: SceneView
     lateinit var topShelf: TopShelf
     lateinit var date: DateLine
+    lateinit var rain: RainLayer
     lateinit var tab: SideTab
     lateinit var shelf: Shelf
     lateinit var dock: Dock
@@ -100,6 +101,8 @@ class HomeActivity : Activity() {
         root.addView(scene, mp, mp)
         root.addView(topShelf, mp, mp)
         root.addView(date, mp, mp)
+        rain = RainLayer(this)
+        root.addView(rain, mp, mp)   // over the scene, its clock and the date; under everything else
         root.addView(shelf, mp, mp)
         root.addView(dock, mp, mp)
         root.addView(tab, FrameLayout.LayoutParams(-2, -2).apply { leftMargin = Ui.ri(5f); topMargin = Ui.ri(3.75f) })
@@ -144,7 +147,7 @@ class HomeActivity : Activity() {
             // the first photo is up: now the glass has something behind it, the home rises in
             if (!sceneUp) { sceneUp = true; if (riseWaiting) { riseWaiting = false; afterTwoFrames { comeBack() } } }
         }
-        scene.onChange = { glassDirty() }
+        scene.onChange = { glassDirty(); rain.again() }
         buildScenes()
         tick()
         refreshWeather()
@@ -167,6 +170,7 @@ class HomeActivity : Activity() {
     lateinit var vpn: VpnPill
     override fun onStop() {
         super.onStop(); away = true
+        rain.pause()
         // while away the dock and the cards wait below the screen (and the corners above it), so
         // coming back they rise in over the scene instead of appearing on an empty screen
         tuck()
@@ -187,6 +191,7 @@ class HomeActivity : Activity() {
         }
         away = false
         glassDirty()
+        rain.resume()
         Trakt.onChange = { main.post { refresh(); settings?.traktChanged() } }
         WatchLog.onChange = { main.post { refresh() } }
         refresh(); refreshWeather(); askRoom()
@@ -194,6 +199,7 @@ class HomeActivity : Activity() {
     override fun onNewIntent(i: Intent?) {
         super.onNewIntent(i)
         endRest()
+        if (i != null && i.hasExtra("rain")) { setIntent(i); rain.want(i.getBooleanExtra("rain", false)) }
         if (i != null && (i.hasExtra("config_b64") || i.hasExtra("ha_b64") || i.hasExtra("trakt_b64") || i.hasExtra("sony_b64") || i.hasExtra("uc_b64"))) { app.couchtv.launcher.storeExtras(this, i); restart() }
         // Home pressed while the home is in front: back to the start
         if (zone == "side") side.close(false)
@@ -246,11 +252,12 @@ class HomeActivity : Activity() {
         scene.night = h >= 21 || h < 6
         date.refresh()
         side.clockChanged()
+        rain.again()
         main.postDelayed(::tick, 60000L - System.currentTimeMillis() % 60000L + 30L)   // just after the minute turns
     }
     fun refreshWeather() {
         if (!store.wxShow) { weather = null; date.refresh(); shelf.render(); return }
-        Weather.fetch(store.place) { w -> if (w != null) { weather = w; date.refresh(); shelf.homeChanged(); panel.redraw() } }
+        Weather.fetch(store.place) { w -> if (w != null) { weather = w; date.refresh(); shelf.homeChanged(); panel.redraw(); rain.again() } }
         main.removeCallbacks(wxAgain); main.postDelayed(wxAgain, store.wxEvery * 60000L)
     }
     private val wxAgain = Runnable { refreshWeather() }
@@ -259,6 +266,9 @@ class HomeActivity : Activity() {
     // ------------------------------------------------------------------ Home Assistant
     fun askRoom() {
         ha.room { r -> room = r; shelf.homeChanged(); panel.redraw() }
+        // adb: am start ... --ez rain true, to see the rain whatever the weather
+        if (intent?.getBooleanExtra("rain", false) == true) rain.want(true)
+        else ha.raining { r -> if (r != null) rain.want(r) }
         main.removeCallbacks(roomAgain); main.postDelayed(roomAgain, 60000)
     }
     private val roomAgain = Runnable { askRoom() }

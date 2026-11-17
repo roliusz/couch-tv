@@ -96,6 +96,25 @@ class Ha(private val ctx: Context) {
         io.execute { val ok = post(h, entity.substringBefore('.') + "/turn_on", JSONObject().put("entity_id", entity)); main.post { done(ok) } }
     }
 
+    // ---- rain on the glass: as the dashboard decides it (casa-v3.js _rainWanted) ----
+    private val RAINY = setOf("rainy", "pouring", "lightning-rainy", "snowy-rainy", "hail")
+    /** Raining outside (ha.json "rain": "weather", a weather entity) or switched on by hand
+     *  ("flag", an input_boolean). done(null) when Home Assistant could not be asked. */
+    fun raining(done: (Boolean?) -> Unit) {
+        val h = cfg() ?: return
+        val r = h.optJSONObject("rain") ?: return
+        val weather = r.optString("weather").takeIf { Regex("weather\\.[a-z0-9_]+").matches(it) }
+        val flag = r.optString("flag").takeIf { Regex("input_boolean\\.[a-z0-9_]+").matches(it) }
+        if (weather == null && flag == null) return
+        io.execute {
+            val f = flag?.let { get(h, "/api/states/$it") }
+            val w = weather?.let { get(h, "/api/states/$it") }
+            val ans: Boolean? = if (f == null && w == null) null
+                else f?.optString("state") == "on" || (w != null && w.optString("state") in RAINY)
+            main.post { done(ans) }
+        }
+    }
+
     // ---- Now Playing: the first speaker in ha.json "players" that is playing or paused ----
     data class Playing(val state: String, val title: String, val artist: String, val picture: String?, val duration: Double, var position: Double, val speaker: String, val entity: String, val at: Long)
     fun playing(done: (Playing?) -> Unit) {

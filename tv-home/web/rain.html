@@ -1,0 +1,69 @@
+<!doctype html>
+<!--
+  Rain on the glass for the native home (home/Rain.kt), the very effect the Home Assistant
+  dashboard draws (casa-v3.js): raindrop-fx 1.0.8 (MIT, vendor/), with the dashboard's settings.
+
+  The library has no see-through mode: it draws a background itself and bends it through the
+  drops. So the home hands it a picture of exactly what is on screen behind the rain (the scene,
+  its clock, its cut-out and the date) and it draws that, sharp, with the drops on top: the drops
+  are on the window, the scene is beyond it. The picture is handed over again when the minute,
+  the scene or the dimming changes.
+
+  Sizes are the dashboard's, in the home's own units: 1 = one pixel of a 1920-wide screen.
+-->
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}canvas{position:fixed;inset:0;width:100%;height:100%;display:block}</style>
+<script src="vendor/raindrop-fx-1.0.8.js"></script>
+</head><body><canvas id="c"></canvas>
+<script>
+(function () {
+  var canvas = document.getElementById("c");
+  var fx = null, building = null;
+  function size() {
+    var dpr = window.devicePixelRatio || 1;
+    return [Math.round(window.innerWidth * dpr), Math.round(window.innerHeight * dpr)];
+  }
+  function load(url) {
+    return new Promise(function (ok, no) { var i = new Image(); i.onload = function () { ok(i); }; i.onerror = no; i.src = url; });
+  }
+  // The dashboard draws the background sharp, not the library's own blurred copy (_sharpenBase).
+  function sharpen(f) {
+    var r = f && f.renderer;
+    if (!r || r._sharp) return;
+    r._sharp = true;
+    var orig = r.drawBackground.bind(r);
+    r.drawBackground = function () {
+      var blurred = r.blurryBackground;
+      r.blurryBackground = r.background;
+      try { orig(); } finally { r.blurryBackground = blurred; }
+    };
+  }
+  function ready() { try { TVRain.ready(); } catch (e) {} }
+  window.rainBackground = function (url) {
+    var job = (building || Promise.resolve()).then(function () { return load(url); }).then(function (img) {
+      if (!fx) {
+        var s = size(); canvas.width = s[0]; canvas.height = s[1];
+        var d = s[0] / 1920;   // the dashboard's numbers are for one pixel of a 1920-wide screen
+        fx = new RaindropFX({ canvas: canvas,
+                              spawnSize: [36 * d, 80 * d], spawnLimit: 900,
+                              gravity: 2400 * d, trailDistance: [20 * d, 30 * d],
+                              evaporate: 10 * d,
+                              dropletsPerSeconds: 240,
+                              backgroundBlurSteps: Math.max(1, Math.round(d)),
+                              mist: false });
+        sharpen(fx);
+        return fx.setBackground(img).then(function () { return fx.start(); }).then(function () {
+          // shown once it has really painted: two frames, as the dashboard waits
+          requestAnimationFrame(function () { requestAnimationFrame(ready); });
+        });
+      }
+      return fx.setBackground(img);
+    }).catch(function (e) { try { TVRain.failed(String(e && e.message || e)); } catch (x) {} });
+    building = job;
+    return job;
+  };
+  window.rainStop = function () { try { fx && fx.stop(); } catch (e) {} };
+})();
+</script>
+</body></html>
