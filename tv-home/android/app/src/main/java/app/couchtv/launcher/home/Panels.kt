@@ -33,12 +33,39 @@ class HomePanel(ctx: Context, private val home: HomeActivity) : View(ctx) {
     private var backdrop: Bitmap? = null
     fun open(k: String) {
         home.zone = "hpanel"
-        home.grab(Ui.r(1.5f), 1.2f, 0.9f) { b -> backdrop = b; kind = k; i = 0; fade.to(1f, 0.3f); invalidate(); home.askRoom() }
+        home.grab(Ui.r(1.5f), 1.2f, 0.9f) { b -> backdrop = b; kind = k; i = 0
+            // one thing playing: straight to its controls (play/pause chosen); several: the list first
+            controlling = k == "media" && home.players.size == 1; ci = 1
+            fade.to(1f, 0.3f); invalidate(); if (k == "media") { home.askPlaying(); post(tick) } else home.askRoom() }
     }
-    fun close() { kind = null; home.zone = "shelf"; fade.to(0f, 0.3f); home.paint() }
+    /** Back: from one player's controls to the list of them, else closed. */
+    fun back() { if (kind == "media" && controlling && home.players.size > 1) { controlling = false; invalidate() } else close() }
+    fun close() { kind = null; removeCallbacks(tick); home.zone = "shelf"; fade.to(0f, 0.3f); home.paint() }
+    // ---- Now Playing ----
+    private var controlling = false
+    private var ci = 1   // previous, play/pause, next
+    private val art = HashMap<String, Bitmap?>()
+    private val artP = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val tick = object : Runnable { override fun run() {
+        if (kind != "media") return
+        home.players.forEach { if (it.state == "playing") it.position += 1.0 }
+        invalidate(); postDelayed(this, 1000)
+    } }
+    private fun artFor(p: Ha.Playing): Bitmap? {
+        val u = p.picture ?: return null
+        if (!art.containsKey(u)) { art[u] = null; home.io.execute { val b = Net.bitmap(context, u, 512); post { art[u] = b; invalidate() } } }
+        return art[u]
+    }
+    private fun mmss(s: Double): String { val t = Math.max(0, Math.round(s).toInt()); return "${t / 60}:" + (if (t % 60 < 10) "0" else "") + (t % 60) }
     fun redraw() { if (kind != null) invalidate() }
 
     fun move(dx: Int, dy: Int) {
+        if (kind == "media") {
+            val ps = home.players
+            if (controlling) { if (dx != 0) { ci = (ci + dx).coerceIn(0, 2); invalidate() } }
+            else if (dy != 0 && ps.isNotEmpty()) { i = (i + dy).coerceIn(0, ps.size - 1); invalidate() }
+            return
+        }
         val r = home.room ?: return
         if (kind == "room") {
             if (dy != 0) { i = (i + dy).coerceIn(0, r.lights.size + r.scenes.size - 1); invalidate(); return }
@@ -64,6 +91,17 @@ class HomePanel(ctx: Context, private val home: HomeActivity) : View(ctx) {
         home.ha.light(l.id, on, pct) { home.askRoom() }
     }
     fun ok() {
+        if (kind == "media") {
+            val ps = home.players
+            val p = ps.getOrNull(if (ps.size == 1) 0 else i) ?: return
+            if (!controlling) { controlling = true; ci = 1; invalidate(); return }
+            val what = listOf("prev", "play", "next")[ci]
+            home.ha.player(p.entity, what)
+            if (what == "play") home.players = ps.map { if (it === p) it.copy(state = if (it.state == "playing") "paused" else "playing") else it }
+            invalidate(); home.shelf.invalidateGlass()
+            postDelayed({ home.askPlaying() }, 1200)
+            return
+        }
         val r = home.room ?: return
         if (kind == "room") {
             if (i >= r.lights.size) {
@@ -86,7 +124,7 @@ class HomePanel(ctx: Context, private val home: HomeActivity) : View(ctx) {
         val w = width.toFloat(); val h = height.toFloat()
         face.draw(c, w, h, 0f, 0f, 0f, 0xB30A0A0E.toInt(), backdrop = backdrop)
         val x0 = Ui.r(7.5f); val y0 = Ui.r(6f); val mainX = x0 + Ui.r(26f + 5f)
-        c.drawText(L.t(when (k) { "room" -> "hc_lights"; "climate" -> "hc_climate"; else -> "hc_weather" }), x0, y0 + Ui.r(2.7f), h2)
+        c.drawText(L.t(when (k) { "room" -> "hc_lights"; "climate" -> "hc_climate"; "media" -> "hc_media"; else -> "hc_weather" }), x0, y0 + Ui.r(2.7f), h2)
         val r = home.room
         var hintText = ""
         when (k) {
@@ -105,6 +143,20 @@ class HomePanel(ctx: Context, private val home: HomeActivity) : View(ctx) {
                 } else {
                     ctl(c, mainX, y0, L.t("hc_scenes"), r.scenes[at - r.lights.size].second, -1f, L.t("hc_scene_run"), true, 0, small = true)
                     hintText = L.t("hc_scene_hint")
+                }
+            }
+            "media" -> {
+                val ps = home.players
+                if (ps.isEmpty()) { c.drawText(L.t("hc_off"), x0 + Ui.r(1.25f), y0 + Ui.r(8f), line) }
+                else {
+                    val single = ps.size == 1
+                    val at = if (single) 0 else i.coerceIn(0, ps.size - 1)
+                    if (!single) {   // everything playing, the chosen one lit
+                        var y = y0 + Ui.r(5.5f)
+                        ps.forEachIndexed { n, p -> y = listRow(c, x0, y, p.speaker, n == at && !controlling, p.state == "playing") }
+                    }
+                    drawPlayer(c, ps[at], if (single) x0 else mainX, y0 + Ui.r(5.5f), w)
+                    hintText = L.t(if (controlling) "hc_media_hint" else "hc_media_list_hint")
                 }
             }
             "climate" -> r?.climate?.let { cl ->
@@ -135,6 +187,43 @@ class HomePanel(ctx: Context, private val home: HomeActivity) : View(ctx) {
             }
         }
         c.drawText(hintText, w / 2, h - Ui.r(3f), hint)
+    }
+    /** One player: its artwork, where, the song and artist, how far in, and its three controls. */
+    private val pWhere = Ui.paint(Ui.interBold, 1.375f, 0x99FFFFFF.toInt())
+    private val pTitle = Ui.paint(Ui.interBold, 3f)
+    private val pArtist = Ui.paint(Ui.inter, 2f, 0xB8FFFFFF.toInt())
+    private val pTime = Ui.paint(Ui.inter, 1.25f, 0x99FFFFFF.toInt())
+    private fun drawPlayer(c: Canvas, p: Ha.Playing, x: Float, y: Float, w: Float) {
+        val a = Ui.r(22f)
+        val n = c.save(); c.clipPath(Path().apply { addRoundRect(x, y, x + a, y + a, Ui.r(1.5f), Ui.r(1.5f), Path.Direction.CW) })
+        val b = artFor(p)
+        if (b != null) c.drawBitmap(b, null, RectF(x, y, x + a, y + a), artP)
+        else { fill.color = 0x24FFFFFF; c.drawRect(x, y, x + a, y + a, fill); Icons.npNote.draw(c, x + a / 2 - Ui.r(3f), y + a / 2 - Ui.r(3f), Ui.r(6f), 0xB3FFFFFF.toInt(), 1.5f) }
+        c.restoreToCount(n)
+        val tx = x + a + Ui.r(3f); val tw = minOf(w - tx - Ui.r(7.5f), Ui.r(60f))
+        var ty = y + Ui.r(2.5f)
+        c.drawText(Ui.fit(pWhere, L.t("playing_on", "name" to p.speaker), tw), tx, ty, pWhere); ty += Ui.r(4f)
+        c.drawText(Ui.fit(pTitle, p.title.ifEmpty { p.speaker }, tw), tx, ty, pTitle); ty += Ui.r(3.25f)
+        if (p.artist.isNotEmpty()) c.drawText(Ui.fit(pArtist, p.artist, tw), tx, ty, pArtist)
+        ty += Ui.r(3.75f)
+        // how far in
+        val pos = p.position.coerceAtMost(if (p.duration > 0) p.duration else Double.MAX_VALUE)
+        if (p.duration > 0) {
+            fill.color = 0x38FFFFFF; c.drawRoundRect(tx, ty, tx + tw, ty + Ui.r(0.5f), Ui.r(0.25f), Ui.r(0.25f), fill)
+            fill.color = 0xD9FFFFFF.toInt(); c.drawRoundRect(tx, ty, tx + tw * (pos / p.duration).toFloat().coerceIn(0f, 1f), ty + Ui.r(0.5f), Ui.r(0.25f), Ui.r(0.25f), fill)
+            c.drawText(mmss(pos), tx, ty + Ui.r(2.25f), pTime)
+            pTime.textAlign = Paint.Align.RIGHT; c.drawText("−" + mmss(p.duration - pos), tx + tw, ty + Ui.r(2.25f), pTime); pTime.textAlign = Paint.Align.LEFT
+        }
+        // the controls: focused, a white circle with a dark symbol (only once this player is chosen)
+        val cy = ty + Ui.r(7f)
+        val icons = listOf(Icons.npPrev, if (p.state == "playing") Icons.npPause else Icons.npPlay, Icons.npNext)
+        for (k in 0..2) {
+            val cx = tx + tw / 2 + (k - 1) * Ui.r(8f)
+            val f = controlling && k == ci
+            if (f) { fill.color = Color.WHITE; c.drawCircle(cx, cy, Ui.r(2.75f), fill) }
+            val ink = if (f) 0xFF111111.toInt() else if (controlling) Color.WHITE else 0x80FFFFFF.toInt()
+            if (k == 1) icons[k].draw(c, cx - Ui.r(1.625f), cy - Ui.r(1.625f), Ui.r(3.25f), ink) else icons[k].draw(c, cx - Ui.r(1.75f), cy - Ui.r(1.75f), Ui.r(3.5f), ink)
+        }
     }
     private fun listRow(c: Canvas, x: Float, y: Float, text: String, focus: Boolean, lit: Boolean): Float {
         val hh = Ui.r(3.875f)
@@ -169,7 +258,8 @@ class HomePanel(ctx: Context, private val home: HomeActivity) : View(ctx) {
  */
 @SuppressLint("ViewConstructor")
 class NowPlayingCard(ctx: Context, private val home: HomeActivity) : View(ctx) {
-    val on get() = home.playing != null
+    // retired: the Now Playing card in the Living Room row (and its panel) took its place
+    val on get() = false
     private var npi = 1
     private var from = "grid"
     private val face = Glass.Face()
@@ -196,7 +286,7 @@ class NowPlayingCard(ctx: Context, private val home: HomeActivity) : View(ctx) {
 
     fun update() {
         val p = home.playing
-        appear.to(if (p != null) 1f else 0f, 0.42f)
+        appear.to(0f, 0.42f)
         val pic = p?.picture
         if (pic != artFor) { artFor = pic; art = null; if (pic != null) home.io.execute { val b = Net.bitmap(context, pic, 256); post { if (artFor == pic) { art = b; invalidate() } } } }
         invalidate()

@@ -205,6 +205,7 @@ class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
         if (r != null && r.lights.isNotEmpty()) out.add(Show("hc-room", L.t("hc_lights"), home = "room"))
         if (r?.climate != null) out.add(Show("hc-climate", L.t("hc_climate"), home = "climate"))
         if (home.store.wxShow && home.weather?.days?.isNotEmpty() == true) out.add(Show("hc-weather", L.t("hc_weather"), home = "weather"))
+        if (home.players.isNotEmpty()) out.add(Show("hc-media", L.t("hc_media"), home = "media"))
         return out
     }
     /** New readings: redraw the row only when a card comes or goes, else each home card in place. */
@@ -299,7 +300,7 @@ class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
         val w = card.width.toFloat(); val h = card.height.toFloat()
         val px = Ui.r(1.25f); val py = Ui.r(1.125f)
         val kind = card.show.home
-        val icon = when (kind) { "room" -> Icons.bulb; "climate" -> Icons.thermo; else -> Icons.cloud }
+        val icon = when (kind) { "room" -> Icons.bulb; "climate" -> Icons.thermo; "media" -> Icons.npNote; else -> Icons.cloud }
         icon.draw(c, px, py + Ui.r(0.0625f), Ui.r(1.375f), 0xB8FFFFFF.toInt())
         c.drawText(card.show.title, px + Ui.r(1.875f), py + Ui.r(1.15f), hk)
         val r = home.room
@@ -308,6 +309,29 @@ class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
                 val lit = r.lights.count { it.on }
                 c.drawText(Ui.fit(big, if (lit > 0) L.t("hc_lit", "n" to lit, "m" to r.lights.size) else L.t("hc_off"), w - 2 * px), px, h - py - Ui.r(1.75f), big)
                 c.drawText(Ui.fit(small, r.label, w - 2 * px), px, h - py - Ui.r(0.3f), small)
+            }
+            // what is playing, as the other cards put a room: one thing, its song and where; several, how many and where
+            "media" -> home.players.let { ps ->
+                if (ps.size == 1) {
+                    // one thing playing: its artwork on the left, the song and the artist beside it
+                    val p = ps[0]
+                    val aw = Ui.r(5.25f); val ax = px; val ay = h - py - aw
+                    val b = mediaArt(card, p.picture)
+                    val n = c.save(); c.clipPath(Path().apply { addRoundRect(ax, ay, ax + aw, ay + aw, Ui.r(0.75f), Ui.r(0.75f), Path.Direction.CW) })
+                    if (b != null) c.drawBitmap(b, null, RectF(ax, ay, ax + aw, ay + aw), artP)
+                    else { artFill.color = 0x24FFFFFF; c.drawRect(ax, ay, ax + aw, ay + aw, artFill); Icons.npNote.draw(c, ax + aw / 2 - Ui.r(1.25f), ay + aw / 2 - Ui.r(1.25f), Ui.r(2.5f), 0xB3FFFFFF.toInt(), 1.6f) }
+                    c.restoreToCount(n)
+                    val tx = ax + aw + Ui.r(1f); val tw = w - px - tx
+                    c.drawText(Ui.fit(song, p.title.ifEmpty { p.speaker }, tw), tx, h - py - Ui.r(1.75f), song)
+                    c.drawText(Ui.fit(small, p.artist.ifEmpty { p.speaker }, tw), tx, h - py - Ui.r(0.3f), small)
+                } else if (ps.isNotEmpty()) {
+                    c.drawText(Ui.fit(big, L.t("hc_n_playing", "n" to ps.size), w - 2 * px), px, h - py - Ui.r(1.75f), big)
+                    c.drawText(Ui.fit(small, ps.joinToString(", ") { it.speaker }, w - 2 * px), px, h - py - Ui.r(0.3f), small)
+                }
+                if (ps.any { it.state == "playing" }) {   // the level meter, on its slow beat
+                    Level.draw(c, w - px + Ui.r(0.1875f), py + Ui.r(0.75f), true, 0xB8FFFFFF.toInt(), Paint(Paint.ANTI_ALIAS_FLAG))
+                    card.postInvalidateDelayed(40)
+                }
             }
             "climate" -> r?.climate?.let { cl ->
                 c.drawText(cl.current?.let { "${Math.round(it * 10) / 10.0}°".replace(".0°", "°") } ?: "–", px, h - py - Ui.r(1.75f), big)
@@ -327,6 +351,21 @@ class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
                 }
             }
         }
+    }
+    private val artP = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    // the song: a step smaller than the other cards' one big figure, as a title runs longer
+    private val song = Ui.paint(Ui.interBold, 1.5f).apply { setShadowLayer(Ui.r(0.5f), 0f, Ui.r(0.0625f), 0x59000000) }
+    private val artFill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val mediaArts = HashMap<String, Bitmap?>()
+    /** The playing artwork, fetched once per picture; the card redraws when it arrives. */
+    private fun mediaArt(card: View, url: String?): Bitmap? {
+        val u = url ?: return null
+        if (!mediaArts.containsKey(u)) {
+            if (mediaArts.size > 12) mediaArts.clear()
+            mediaArts[u] = null
+            home.io.execute { val b = Net.bitmap(context, u, 256); card.post { mediaArts[u] = b; card.invalidate() } }
+        }
+        return mediaArts[u]
     }
     fun climateWords(cl: Ha.Climate): String {
         val to = cl.target?.let { "${Math.round(it * 10) / 10.0}°".replace(".0°", "°") } ?: ""

@@ -51,6 +51,8 @@ class HomeActivity : Activity() {
     var weather: Weather.Now? = null
     var room: Ha.Room? = null
     var playing: Ha.Playing? = null
+    /** Everything playing in the house (the Now Playing card and its panel); [playing] is the first. */
+    var players: List<Ha.Playing> = emptyList()
 
     // focus: grid (the dock), shelf, tab, np, side, hpanel, settings
     var zone = "grid"
@@ -162,6 +164,7 @@ class HomeActivity : Activity() {
         // adb: --ez npdemo true, a sample song to look at the music card and bar with no speaker playing
         if (intent?.getBooleanExtra("npdemo", false) == true) main.postDelayed({
             playing = Ha.Playing("playing", "Golden Hour Drive", "The Paper Lanterns", null, 214.0, 64.0, "Living room speaker", "", System.currentTimeMillis())
+            players = listOf(playing!!); shelf.homeChanged()
             np.update(); np.requestLayout(); wideUpdate() }, 1500)
         if (intent?.getBooleanExtra("rest", false) == true) { main.removeCallbacks(goIdle); main.postDelayed(goIdle, 4000) }
     }
@@ -273,7 +276,12 @@ class HomeActivity : Activity() {
     }
     private val roomAgain = Runnable { askRoom() }
     fun askPlaying() {
-        ha.playing { p -> val was = np.on; playing = p; np.update(); if (!np.on && zone == "np") np.leave(); if (was != np.on) np.requestLayout(); wideUpdate() }
+        if (intent?.getBooleanExtra("npdemo", false) == true) return   // the sample song stays while looking at it
+        ha.playingAll { all ->
+            // the speakers named in ha.json lead (the resting music bar shows the first of those)
+            players = all; playing = all.firstOrNull { it.speakerOfOurs } ?: all.firstOrNull()
+            np.update(); wideUpdate(); shelf.homeChanged(); panel.redraw()
+        }
         main.removeCallbacks(playAgain); main.postDelayed(playAgain, if (hasWindowFocus()) 5000 else 30000)
     }
     private val playAgain = Runnable { if (intent?.getBooleanExtra("npdemo", false) != true) askPlaying() }
@@ -383,7 +391,7 @@ class HomeActivity : Activity() {
             "tab" -> { fromTab(); return }
             "np" -> { np.leave(); return }
             "settings" -> { settings?.back(); return }
-            "hpanel" -> { panel.close(); return }
+            "hpanel" -> { panel.back(); return }
         }
         if (dock.lift != null) { dock.drop(); return }
         if (apps.expanded) { apps.expanded = false; dock.render(grow = true); startFocus(); paint(); return }
@@ -522,7 +530,7 @@ class HomeActivity : Activity() {
         }
         when (k) {
             KeyEvent.KEYCODE_MENU -> if (e.repeatCount == 0) hold()
-            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> if (np.on) np.act("play") else return super.dispatchKeyEvent(e)
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> playing?.let { p -> ha.player(p.entity, "play"); main.postDelayed({ askPlaying() }, 1200) } ?: return super.dispatchKeyEvent(e)
             else -> if (back) goHome(true) else return super.dispatchKeyEvent(e)
         }
         return true

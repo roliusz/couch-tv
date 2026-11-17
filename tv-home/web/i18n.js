@@ -251,7 +251,11 @@
     qp_picture_mode: "Picture mode",
     qp_on: "On",
     qp_max: "Max",
-    qp_scenes: "Scenes"
+    qp_scenes: "Scenes",
+    hc_media: "Now Playing",
+    hc_n_playing: "{n} playing",
+    hc_media_hint: "Left and right pick a control · OK presses it · Back closes",
+    hc_media_list_hint: "Up and down pick one · OK shows its controls · Back closes"
   };
 
   S.es = {
@@ -487,7 +491,11 @@
     qp_picture_mode: "Modo de imagen",
     qp_on: "Sí",
     qp_max: "Máx.",
-    qp_scenes: "Escenas"
+    qp_scenes: "Escenas",
+    hc_media: "Reproduciendo",
+    hc_n_playing: "{n} reproduciendo",
+    hc_media_hint: "Izquierda y derecha eligen un control · OK lo pulsa · Atrás cierra",
+    hc_media_list_hint: "Arriba y abajo eligen uno · OK muestra sus controles · Atrás cierra"
   };
 
   // Only what Mexico says differently; everything else comes from es.

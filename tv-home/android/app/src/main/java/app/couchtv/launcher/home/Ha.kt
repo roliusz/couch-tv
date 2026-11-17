@@ -115,31 +115,46 @@ class Ha(private val ctx: Context) {
         }
     }
 
-    // ---- Now Playing: the first speaker in ha.json "players" that is playing or paused ----
-    data class Playing(val state: String, val title: String, val artist: String, val picture: String?, val duration: Double, var position: Double, val speaker: String, val entity: String, val at: Long)
-    fun playing(done: (Playing?) -> Unit) {
+    // ---- Now Playing: everything playing. ha.json's "players" (the speakers, by the names given
+    // there, playing or paused) first, then any other media player Home Assistant has playing ----
+    data class Playing(val state: String, val title: String, val artist: String, val picture: String?, val duration: Double, var position: Double, val speaker: String, val entity: String, val at: Long, val speakerOfOurs: Boolean = true)
+    private fun reading(h: JSONObject, id: String, st: JSONObject, name: String?, ours: Boolean): Playing {
+        val s = st.optString("state")
+        val a = st.optJSONObject("attributes") ?: JSONObject()
+        val pic = a.optString("entity_picture").ifEmpty { null }?.let { if (it.startsWith("http")) it else h.getString("url").trimEnd('/') + it }
+        var pos = a.optDouble("media_position", 0.0)
+        val upd = a.optString("media_position_updated_at")
+        if (s == "playing" && upd.isNotEmpty()) try {
+            val t = java.time.OffsetDateTime.parse(upd).toInstant().toEpochMilli()
+            pos += (System.currentTimeMillis() - t) / 1000.0
+        } catch (e: Exception) {}
+        val title = a.optString("media_title").ifEmpty { a.optString("app_name") }
+        return Playing(s, title, a.optString("media_artist").ifEmpty { a.optString("media_album_artist") }, pic, a.optDouble("media_duration", 0.0), pos,
+            name ?: a.optString("friendly_name", id), id, System.currentTimeMillis(), ours)
+    }
+    /** What is playing or paused among the house's media players: the Home Assistant dashboard's
+     *  own list (ha.json "media": each room's players, in room order, as its Media filter shows
+     *  them), else just the speakers in "players". Named as the dashboard names them, else as
+     *  "players" does, else as Home Assistant does. */
+    fun playingAll(done: (List<Playing>) -> Unit) {
         val h = cfg() ?: return
-        val ps = h.optJSONArray("players") ?: return
+        val ps = h.optJSONArray("players") ?: JSONArray()
+        val speakers = HashMap<String, String>()
+        for (i in 0 until ps.length()) ps.optJSONObject(i)?.let { speakers[it.optString("id")] = it.optString("name") }
+        val list = ArrayList<Pair<String, String?>>()
+        val media = h.optJSONArray("media")
+        if (media != null) for (i in 0 until media.length()) media.optJSONObject(i)?.let { list.add(it.optString("id") to it.optString("name").ifEmpty { null }) }
+        else speakers.keys.forEach { list.add(it to null) }
         io.execute {
-            var found: Playing? = null
-            for (i in 0 until ps.length()) {
-                val p = ps.optJSONObject(i) ?: continue
-                val id = p.optString("id"); val st = get(h, "/api/states/$id") ?: continue
+            val out = ArrayList<Playing>()
+            for ((id, name) in list.distinctBy { it.first }) {
+                if (!Regex("media_player\\.[a-z0-9_]+").matches(id)) continue
+                val st = get(h, "/api/states/$id") ?: continue
                 val s = st.optString("state")
                 if (s != "playing" && s != "paused") continue
-                val a = st.optJSONObject("attributes") ?: JSONObject()
-                val pic = a.optString("entity_picture").ifEmpty { null }?.let { if (it.startsWith("http")) it else h.getString("url").trimEnd('/') + it }
-                var pos = a.optDouble("media_position", 0.0)
-                val upd = a.optString("media_position_updated_at")
-                if (s == "playing" && upd.isNotEmpty()) try {
-                    val t = java.time.OffsetDateTime.parse(upd).toInstant().toEpochMilli()
-                    pos += (System.currentTimeMillis() - t) / 1000.0
-                } catch (e: Exception) {}
-                found = Playing(s, a.optString("media_title"), a.optString("media_artist"), pic, a.optDouble("media_duration", 0.0), pos,
-                    p.optString("name", a.optString("friendly_name")), id, System.currentTimeMillis())
-                break
+                out.add(reading(h, id, st, name ?: speakers[id]?.ifEmpty { null }, id in speakers))
             }
-            main.post { done(found) }
+            main.post { done(out) }
         }
     }
     fun player(entity: String, action: String) {
