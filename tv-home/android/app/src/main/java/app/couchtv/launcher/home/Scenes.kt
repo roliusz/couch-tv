@@ -437,6 +437,8 @@ class SceneView(ctx: Context) : View(ctx) {
 /** Pictures from the network (Trakt artwork, photo addresses) and the TV's own records, cached. */
 object Net {
     private val mem = android.util.LruCache<String, Bitmap>(24)
+    /** A login for pictures from a server that needs one (Home Assistant), by address. */
+    @Volatile var authFor: ((String) -> String?)? = null
     fun bitmap(ctx: Context, url: String, maxW: Int): Bitmap? {
         mem.get("$url@$maxW")?.let { return it }
         val bytes: ByteArray = try {
@@ -448,6 +450,8 @@ object Net {
                 if (f.isFile && f.length() > 0) f.readBytes() else {
                     val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
                     c.connectTimeout = 5000; c.readTimeout = 10000; c.instanceFollowRedirects = true
+                    authFor?.invoke(url)?.let { c.setRequestProperty("Authorization", it) }
+                    if (c.responseCode >= 400) { android.util.Log.w("Net", "picture: HTTP " + c.responseCode); c.disconnect(); return null }
                     val b = c.inputStream.use { it.readBytes() }; c.disconnect()
                     f.writeBytes(b); b
                 }

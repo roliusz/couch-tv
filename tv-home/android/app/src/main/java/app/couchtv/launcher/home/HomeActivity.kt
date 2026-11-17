@@ -530,7 +530,7 @@ class HomeActivity : Activity() {
         }
         when (k) {
             KeyEvent.KEYCODE_MENU -> if (e.repeatCount == 0) hold()
-            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> playing?.let { p -> ha.player(p.entity, "play"); main.postDelayed({ askPlaying() }, 1200) } ?: return super.dispatchKeyEvent(e)
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> playing?.let { p -> ha.player(p.entity, "play", p.state, p.listed); main.postDelayed({ askPlaying() }, 1200) } ?: return super.dispatchKeyEvent(e)
             else -> if (back) goHome(true) else return super.dispatchKeyEvent(e)
         }
         return true

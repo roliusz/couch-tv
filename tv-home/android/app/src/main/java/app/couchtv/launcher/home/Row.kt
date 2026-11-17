@@ -201,11 +201,12 @@ class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
     }
     private fun homeCards(): List<Show> {
         val out = ArrayList<Show>()
+        // something playing comes first in the row
+        if (home.players.isNotEmpty()) out.add(Show("hc-media", L.t("hc_media"), home = "media"))
         val r = home.room
         if (r != null && r.lights.isNotEmpty()) out.add(Show("hc-room", L.t("hc_lights"), home = "room"))
         if (r?.climate != null) out.add(Show("hc-climate", L.t("hc_climate"), home = "climate"))
         if (home.store.wxShow && home.weather?.days?.isNotEmpty() == true) out.add(Show("hc-weather", L.t("hc_weather"), home = "weather"))
-        if (home.players.isNotEmpty()) out.add(Show("hc-media", L.t("hc_media"), home = "media"))
         return out
     }
     /** New readings: redraw the row only when a card comes or goes, else each home card in place. */
@@ -322,8 +323,10 @@ class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
                     else { artFill.color = 0x24FFFFFF; c.drawRect(ax, ay, ax + aw, ay + aw, artFill); Icons.npNote.draw(c, ax + aw / 2 - Ui.r(1.25f), ay + aw / 2 - Ui.r(1.25f), Ui.r(2.5f), 0xB3FFFFFF.toInt(), 1.6f) }
                     c.restoreToCount(n)
                     val tx = ax + aw + Ui.r(1f); val tw = w - px - tx
+                    // which speaker, small and faint, over the song and the artist
+                    c.drawText(Ui.fit(where, p.speaker, tw), tx, h - py - Ui.r(3.6f), where)
                     c.drawText(Ui.fit(song, p.title.ifEmpty { p.speaker }, tw), tx, h - py - Ui.r(1.75f), song)
-                    c.drawText(Ui.fit(small, p.artist.ifEmpty { p.speaker }, tw), tx, h - py - Ui.r(0.3f), small)
+                    if (p.artist.isNotEmpty()) c.drawText(Ui.fit(small, p.artist, tw), tx, h - py - Ui.r(0.3f), small)
                 } else if (ps.isNotEmpty()) {
                     c.drawText(Ui.fit(big, L.t("hc_n_playing", "n" to ps.size), w - 2 * px), px, h - py - Ui.r(1.75f), big)
                     c.drawText(Ui.fit(small, ps.joinToString(", ") { it.speaker }, w - 2 * px), px, h - py - Ui.r(0.3f), small)
@@ -355,6 +358,7 @@ class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
     private val artP = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     // the song: a step smaller than the other cards' one big figure, as a title runs longer
     private val song = Ui.paint(Ui.interBold, 1.5f).apply { setShadowLayer(Ui.r(0.5f), 0f, Ui.r(0.0625f), 0x59000000) }
+    private val where = Ui.paint(Ui.inter, 0.9375f, 0x80FFFFFF.toInt()).apply { setShadowLayer(Ui.r(0.5f), 0f, Ui.r(0.0625f), 0x59000000) }
     private val artFill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val mediaArts = HashMap<String, Bitmap?>()
     /** The playing artwork, fetched once per picture; the card redraws when it arrives. */
@@ -363,7 +367,8 @@ class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
         if (!mediaArts.containsKey(u)) {
             if (mediaArts.size > 12) mediaArts.clear()
             mediaArts[u] = null
-            home.io.execute { val b = Net.bitmap(context, u, 256); card.post { mediaArts[u] = b; card.invalidate() } }
+            // the row may have made its cards again meanwhile: redraw whichever card shows it now
+            home.io.execute { val b = Net.bitmap(context, u, 256); post { mediaArts[u] = b; invalidateGlass() } }
         }
         return mediaArts[u]
     }

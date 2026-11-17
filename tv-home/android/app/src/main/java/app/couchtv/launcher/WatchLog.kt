@@ -43,8 +43,8 @@ object WatchLog {
         "app.couchtv.launcher", "com.google.android.youtube.tvmusic", "com.spotify.tv.android",
         "com.google.android.apps.tv.launcherx", "com.sony.dtv.osat.music", "com.android.bluetooth",
         "com.google.android.youtube.tv", "com.google.android.tv",
-        // HBO Max: its own record is only the title; Trakt follows it properly (Trakt.kt)
-        "com.wbd.stream",
+        // HBO Max and Disney+: only through Trakt, which follows them properly (Trakt.kt)
+        "com.wbd.stream", "com.disney.disneyplus",
         // YouTube TV: not a Keep watching source (the household's choice); its old records drop off too
         "com.google.android.youtube.tvunplugged"
     )

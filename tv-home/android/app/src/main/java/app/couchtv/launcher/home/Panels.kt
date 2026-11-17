@@ -96,7 +96,7 @@ class HomePanel(ctx: Context, private val home: HomeActivity) : View(ctx) {
             val p = ps.getOrNull(if (ps.size == 1) 0 else i) ?: return
             if (!controlling) { controlling = true; ci = 1; invalidate(); return }
             val what = listOf("prev", "play", "next")[ci]
-            home.ha.player(p.entity, what)
+            home.ha.player(p.entity, what, p.state, p.listed)
             if (what == "play") home.players = ps.map { if (it === p) it.copy(state = if (it.state == "playing") "paused" else "playing") else it }
             invalidate(); home.shelf.invalidateGlass()
             postDelayed({ home.askPlaying() }, 1200)

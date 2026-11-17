@@ -14,6 +14,11 @@ import java.util.concurrent.Executors
  * (prefs "home", key "ha", sent by apply.sh). Only the entities named in ha.json are touched.
  */
 class Ha(private val ctx: Context) {
+    init {
+        // pictures Home Assistant serves (a player's artwork through its media proxy) are asked
+        // for with the same login as everything else
+        Net.authFor = { u -> cfg()?.let { h -> val base = h.optString("url").trimEnd('/'); if (base.isNotEmpty() && u.startsWith(base)) "Bearer " + h.optString("token") else null } }
+    }
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private fun cfg(): JSONObject? = ctx.getSharedPreferences("home", Context.MODE_PRIVATE).getString("ha", null)?.let { try { JSONObject(it) } catch (e: Exception) { null } }
@@ -34,6 +39,18 @@ class Ha(private val ctx: Context) {
         c.outputStream.use { it.write(body.toString().toByteArray()) }
         val ok = c.responseCode in 200..299; c.disconnect(); ok
     } catch (e: Exception) { false }
+
+    /** The answer Home Assistant gave: its status and the start of what it said. */
+    private fun postFor(h: JSONObject, path: String, body: JSONObject): String = try {
+        val c = java.net.URL(h.getString("url").trimEnd('/') + "/api/services/" + path).openConnection() as HttpURLConnection
+        c.requestMethod = "POST"; c.doOutput = true; c.connectTimeout = 4000; c.readTimeout = 8000
+        c.setRequestProperty("Authorization", "Bearer " + h.optString("token"))
+        c.setRequestProperty("Content-Type", "application/json")
+        c.outputStream.use { it.write(body.toString().toByteArray()) }
+        val code = c.responseCode
+        val txt = ((if (code < 400) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } ?: "").take(160)
+        c.disconnect(); "$code $txt"
+    } catch (e: Exception) { "failed: $e" }
 
     // ---- the living room ----
     data class Light(val id: String, val name: String, var on: Boolean, val available: Boolean, var brightness: Int?)
@@ -117,7 +134,7 @@ class Ha(private val ctx: Context) {
 
     // ---- Now Playing: everything playing. ha.json's "players" (the speakers, by the names given
     // there, playing or paused) first, then any other media player Home Assistant has playing ----
-    data class Playing(val state: String, val title: String, val artist: String, val picture: String?, val duration: Double, var position: Double, val speaker: String, val entity: String, val at: Long, val speakerOfOurs: Boolean = true)
+    data class Playing(val state: String, val title: String, val artist: String, val picture: String?, val duration: Double, var position: Double, val speaker: String, val entity: String, val at: Long, val speakerOfOurs: Boolean = true, val listed: String? = null)
     private fun reading(h: JSONObject, id: String, st: JSONObject, name: String?, ours: Boolean): Playing {
         val s = st.optString("state")
         val a = st.optJSONObject("attributes") ?: JSONObject()
@@ -135,32 +152,63 @@ class Ha(private val ctx: Context) {
     /** What is playing or paused among the house's media players: the Home Assistant dashboard's
      *  own list (ha.json "media": each room's players, in room order, as its Media filter shows
      *  them), else just the speakers in "players". Named as the dashboard names them, else as
-     *  "players" does, else as Home Assistant does. */
+     *  "players" does, else as Home Assistant does. Only the Google Cast entities listed: a speaker's
+     *  other entities (living_room_speaker_2, its DLNA side) are not read or controlled. */
     fun playingAll(done: (List<Playing>) -> Unit) {
         val h = cfg() ?: return
         val ps = h.optJSONArray("players") ?: JSONArray()
         val speakers = HashMap<String, String>()
         for (i in 0 until ps.length()) ps.optJSONObject(i)?.let { speakers[it.optString("id")] = it.optString("name") }
         val list = ArrayList<Pair<String, String?>>()
+        val groups = HashSet<String>()
         val media = h.optJSONArray("media")
-        if (media != null) for (i in 0 until media.length()) media.optJSONObject(i)?.let { list.add(it.optString("id") to it.optString("name").ifEmpty { null }) }
+        if (media != null) for (i in 0 until media.length()) media.optJSONObject(i)?.let {
+            list.add(it.optString("id") to it.optString("name").ifEmpty { null })
+            if (it.optBoolean("group")) groups.add(it.optString("id"))
+        }
         else speakers.keys.forEach { list.add(it to null) }
         io.execute {
+            val states = HashMap<String, JSONObject>()
+            try {
+                val c = java.net.URL(h.getString("url").trimEnd('/') + "/api/states").openConnection() as HttpURLConnection
+                c.connectTimeout = 3000; c.readTimeout = 8000
+                c.setRequestProperty("Authorization", "Bearer " + h.optString("token"))
+                if (c.responseCode == 200) {
+                    val arr = JSONArray(c.inputStream.bufferedReader().use { it.readText() })
+                    for (i in 0 until arr.length()) arr.optJSONObject(i)?.let { o -> val id = o.optString("entity_id"); if (id.startsWith("media_player.")) states[id] = o }
+                }
+                c.disconnect()
+            } catch (e: Exception) {}
+            if (states.isEmpty()) { main.post { done(emptyList()) }; return@execute }
             val out = ArrayList<Playing>()
             for ((id, name) in list.distinctBy { it.first }) {
                 if (!Regex("media_player\\.[a-z0-9_]+").matches(id)) continue
-                val st = get(h, "/api/states/$id") ?: continue
-                val s = st.optString("state")
-                if (s != "playing" && s != "paused") continue
-                out.add(reading(h, id, st, name ?: speakers[id]?.ifEmpty { null }, id in speakers))
+                val st = states[id]?.takeIf { it.optString("state") in setOf("playing", "paused") } ?: continue
+                out.add(reading(h, st.optString("entity_id"), st, name ?: speakers[id]?.ifEmpty { null }, id in speakers).copy(listed = id))
             }
-            main.post { done(out) }
+            // a group playing (Speakers) has each of its speakers report the same song: one entry,
+            // the first listed (the group comes before its speakers)
+            // the whole-house group (ha.json "group": the Speakers) playing: that alone, the rest ignored
+            val one = out.firstOrNull { it.listed in groups }?.let { listOf(it) }
+                ?: out.distinctBy { if (it.title.isEmpty()) it.entity else it.title + "\u0000" + it.artist }
+            main.post { done(one) }
         }
     }
-    fun player(entity: String, action: String) {
+    /** A control for what is playing, on that player only (a Google Cast entity). Separate play and
+     *  pause by what it is doing, and the two-way play/pause if it offers only that. */
+    fun player(entity: String, action: String, state: String? = null, listed: String? = null) {
         val h = cfg() ?: return
-        val svc = when (action) { "play" -> "media_play_pause"; "next" -> "media_next_track"; "prev" -> "media_previous_track"; else -> return }
-        io.execute { post(h, "media_player/$svc", JSONObject().put("entity_id", entity)) }
+        val svcs = when (action) {
+            "play" -> when (state) { "playing" -> listOf("media_pause", "media_play_pause"); "paused" -> listOf("media_play", "media_play_pause"); else -> listOf("media_play_pause") }
+            "next" -> listOf("media_next_track"); "prev" -> listOf("media_previous_track"); else -> return
+        }
+        io.execute {
+            for (svc in svcs) {
+                val r = postFor(h, "media_player/$svc", JSONObject().put("entity_id", entity))
+                if (r.startsWith("2")) return@execute
+                android.util.Log.w("Ha", "player $entity $svc: $r")
+            }
+        }
     }
 }
 
