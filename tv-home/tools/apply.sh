@@ -120,7 +120,12 @@ UC_REMOTE="${UC_REMOTE:-$ROOT/uc-remote.json}"   # UC_REMOTE=none: a TV the Remo
 SONY64=""
 SONY_PSK="${SONY_PSK:-$ROOT/sony-psk.txt}"   # SONY_PSK=none: not a Sony
 [ -f "$SONY_PSK" ] && SONY64=$("$PY" -c 'import base64,sys; print(base64.b64encode(open(sys.argv[1]).read().strip().encode()).decode())' "$SONY_PSK")
-"$PY" "$T" shell "am force-stop app.couchtv.launcher; am start -n $HOME_ACT --es bridge ${BRIDGE_URL:-none} --es config_b64 $CFG64 ${HA64:+--es ha_b64 $HA64} ${TRAKT64:+--es trakt_b64 $TRAKT64} ${TMDB64:+--es tmdb_b64 $TMDB64} ${SONY64:+--es sony_b64 $SONY64} ${UC64:+--es uc_b64 $UC64} ${TV_ID:+--es tv $TV_ID}"
+# fork: READ_LOGS=1 lets the home read a battery the device's own software only logs (the XGIMI)
+[ "${READ_LOGS:-0}" = 1 ] && "$PY" "$T" shell "pm grant app.couchtv.launcher android.permission.READ_LOGS" >/dev/null 2>&1
+# fork: no force-stop. Android switches an app's accessibility service off when the app is
+# force-stopped, and the gear button's (KeyCatcher.kt) is switched on by the household. The home
+# takes new settings while running (onNewIntent) and restarts itself to use them.
+"$PY" "$T" shell "am start -n $HOME_ACT --es bridge ${BRIDGE_URL:-none} --es config_b64 $CFG64 ${HA64:+--es ha_b64 $HA64} ${TRAKT64:+--es trakt_b64 $TRAKT64} ${TMDB64:+--es tmdb_b64 $TMDB64} ${SONY64:+--es sony_b64 $SONY64} ${UC64:+--es uc_b64 $UC64} ${TV_ID:+--es tv $TV_ID}"
 
 # Tell the bridge's daily guard what to keep switched off (a Google TV update can switch it back
 # on). Option A has no bridge, so no guard: run this script again after an update.

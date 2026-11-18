@@ -128,10 +128,20 @@ class HomeActivity : Activity() {
                 val present = i.getBooleanExtra(android.os.BatteryManager.EXTRA_PRESENT, false)
                 val lv = i.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1); val sc = i.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100)
                 val st = i.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1)
-                val chg = st == android.os.BatteryManager.BATTERY_STATUS_CHARGING || st == android.os.BatteryManager.BATTERY_STATUS_FULL
-                battery.update(if (present && lv >= 0 && sc > 0) lv * 100 / sc else -1, chg)
+                // plugged in (a cable on the mains or USB-C), whatever the charge says: the bolt
+                val plugged = i.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0 ||
+                    st == android.os.BatteryManager.BATTERY_STATUS_CHARGING || st == android.os.BatteryManager.BATTERY_STATUS_FULL
+                // (not on the XGIMI: Android there says "on the mains" whether a cable is in or not;
+                // its own reading, in BatteryLog, says whether it is charging)
+                if (!BatteryLog.wanted()) battery.showPlugged(plugged)
+                // the level only from a battery Android knows; the XGIMI's comes from BatteryLog
+                if (present && lv >= 0 && sc > 0) battery.showLevel(lv * 100 / sc)
             }
         }, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        // the XGIMI keeps its battery from Android: read from what its battery display logs
+        // Android asks the household once per start whether the home may read the log; asked while
+        // the home is still rising in, its own window closed the question unanswered, so: settled first
+        main.postDelayed({ BatteryLog.start { lv, chg -> battery.showLevel(lv); battery.showPlugged(chg) } }, 4000)
         root.shadow(np, { Ui.r(2.25f) }, { if (onLight(np)) 24f else 14f }, { if (onLight(np)) 8f else 8f }, { if (onLight(np)) 0x40000000 else 0x1F000000 })
         root.shadow(npWide, { Ui.r(2.75f) }, { 14f }, { 8f }, { 0x1F000000 })
         root.shadow(toast, { Ui.r(2f) }, { Ui.r(1.5f) }, { Ui.r(0.375f) }, { if (onLight(toast)) 0x40000000 else 0x26000000 })
@@ -219,6 +229,8 @@ class HomeActivity : Activity() {
         super.onNewIntent(i)
         endRest()
         if (i != null && i.hasExtra("rain")) { setIntent(i); rain.want(i.getBooleanExtra("rain", false)) }
+        // adb: --ez readlog true, Android's question about the log asked again (the battery)
+        if (i?.getBooleanExtra("readlog", false) == true) { BatteryLog.restart(); return }
         if (i != null && (i.hasExtra("config_b64") || i.hasExtra("ha_b64") || i.hasExtra("trakt_b64") || i.hasExtra("sony_b64") || i.hasExtra("uc_b64"))) { app.couchtv.launcher.storeExtras(this, i); restart() }
         // Home pressed while the home is in front: back to the start
         if (zone == "side") side.close(false)

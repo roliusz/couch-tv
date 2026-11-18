@@ -153,13 +153,17 @@ class BatteryRing(ctx: Context, private val home: HomeActivity) : View(ctx) {
     private val num = Ui.paint(Ui.interBold, 1f).apply { textAlign = Paint.Align.CENTER }
     private val box = RectF()
     init { visibility = GONE }
-    fun update(pct: Int, plugged: Boolean) {
+    fun update(pct: Int, plugged: Boolean) { showLevel(pct); showPlugged(plugged) }
+    /** The charge, 0 to 100 (-1: none known, the ring hides). */
+    fun showLevel(pct: Int) {
         val show = pct in 0..100
-        if (pct == level && plugged == charging && (visibility == VISIBLE) == show) return
-        level = pct; charging = plugged
+        if (pct == level && (visibility == VISIBLE) == show) return
+        level = pct
         visibility = if (show) VISIBLE else GONE
         invalidate(); (parent as? View)?.invalidate()
     }
+    /** Plugged in: the bolt under the number. */
+    fun showPlugged(p: Boolean) { if (p != charging) { charging = p; invalidate() } }
     override fun onMeasure(w: Int, h: Int) { val d = Ui.r(3.75f).toInt(); setMeasuredDimension(d, d) }
     override fun onDraw(c: Canvas) {
         val w = width.toFloat(); val h = height.toFloat()
