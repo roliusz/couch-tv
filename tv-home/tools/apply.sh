@@ -120,8 +120,6 @@ UC_REMOTE="${UC_REMOTE:-$ROOT/uc-remote.json}"   # UC_REMOTE=none: a TV the Remo
 SONY64=""
 SONY_PSK="${SONY_PSK:-$ROOT/sony-psk.txt}"   # SONY_PSK=none: not a Sony
 [ -f "$SONY_PSK" ] && SONY64=$("$PY" -c 'import base64,sys; print(base64.b64encode(open(sys.argv[1]).read().strip().encode()).decode())' "$SONY_PSK")
-# fork: READ_LOGS=1 lets the home read a battery the device's own software only logs (the XGIMI)
-[ "${READ_LOGS:-0}" = 1 ] && "$PY" "$T" shell "pm grant app.couchtv.launcher android.permission.READ_LOGS" >/dev/null 2>&1
 # fork: no force-stop. Android switches an app's accessibility service off when the app is
 # force-stopped, and the gear button's (KeyCatcher.kt) is switched on by the household. The home
 # takes new settings while running (onNewIntent) and restarts itself to use them.

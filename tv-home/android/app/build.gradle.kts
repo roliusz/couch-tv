@@ -35,6 +35,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+    packaging { resources { excludes += setOf("META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/*.kotlin_module") } }
+}
+
+dependencies {
+    // fork: the home talking to its own TV's ADB on 127.0.0.1:5555 (home/SelfAdb.kt), for what only
+    // the debug shell may read (the XGIMI battery). Same libraries as the on-TV app.
+    implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
+    implementation("org.bouncycastle:bcpkix-jdk15to18:1.81")
 }
 
 /**

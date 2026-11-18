@@ -138,11 +138,15 @@ class HomeActivity : Activity() {
                 if (present && lv >= 0 && sc > 0) battery.showLevel(lv * 100 / sc)
             }
         }, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        // the XGIMI keeps its battery from Android: read from what its battery display logs
-        // Android asks the household once per start whether the home may read the log; asked while
-        // the home is still rising in, its own window closed the question unanswered, so: settled first
-        if (BatteryLog.wanted()) io.execute { BatteryLog.rough(this)?.let { (lv, chg) -> main.post { if (!BatteryLog.got) { battery.rough = true; battery.showLevel(lv); battery.showPlugged(chg) } } } }
-        main.postDelayed({ BatteryLog.start { lv, chg -> battery.rough = false; battery.showLevel(lv); battery.showPlugged(chg); battery.invalidate() } }, 4000)
+        // the XGIMI keeps its battery from Android. The rough level at once (XGIMI's widget), then the
+        // exact one from its power service through the home's own debug connection (SelfAdb: one
+        // "Allow debugging?" ever). Never the log: Android would ask about that on every start, which
+        // the household does not want. Asked once the home has settled: asked while it was still
+        // rising in, its own window closed the question unanswered.
+        if (BatteryLog.wanted()) {
+            io.execute { BatteryLog.rough(this)?.let { (lv, chg) -> main.post { if (!exactBattery && !BatteryLog.got) { battery.rough = true; battery.showLevel(lv); battery.showPlugged(chg) } } } }
+            main.postDelayed({ startExactBattery() }, 4000)
+        }
         root.shadow(np, { Ui.r(2.25f) }, { if (onLight(np)) 24f else 14f }, { if (onLight(np)) 8f else 8f }, { if (onLight(np)) 0x40000000 else 0x1F000000 })
         root.shadow(npWide, { Ui.r(2.75f) }, { 14f }, { 8f }, { 0x1F000000 })
         root.shadow(toast, { Ui.r(2f) }, { Ui.r(1.5f) }, { Ui.r(0.375f) }, { if (onLight(toast)) 0x40000000 else 0x26000000 })
@@ -198,6 +202,33 @@ class HomeActivity : Activity() {
     private var away = false
     lateinit var vpn: VpnPill
     lateinit var battery: BatteryRing
+    @Volatile private var exactBattery = false
+    private var batteryPoll: Runnable? = null
+
+    /** The XGIMI's exact battery (see onCreate): through SelfAdb, read every 20 s (a plug in or out shows soon); the rough level
+     *  stays until it answers. "Allow debugging?" is asked only while the household has never
+     *  allowed the home: once allowed, a failed read (adbd not up yet after a restart, a stale
+     *  connection) simply tries again quietly. */
+    private fun startExactBattery() {
+        batteryPoll?.let { main.removeCallbacks(it) }
+        var asked = false
+        var homeChecked = false
+        val poll = object : Runnable { override fun run() {
+            io.execute {
+                val allowed = SelfAdb.everAllowed(this@HomeActivity)
+                if (!allowed && asked) return@execute   // refused or ignored: no asking again this start
+                if (!SelfAdb.connected) { asked = true; SelfAdb.connect(this@HomeActivity, if (allowed) 15L else 120L) }
+                val r = XgimiShell.read()
+                if (r != null) {
+                    exactBattery = true
+                    if (!homeChecked) { homeChecked = true; try { XgimiShell.keepGoogleHomeOff(this@HomeActivity) } catch (e: Exception) {} }
+                    main.post { battery.rough = false; battery.showLevel(r.first); battery.showPlugged(r.second); battery.invalidate() }
+                } else android.util.Log.i("HomeActivity", "battery: no reading (connected=${SelfAdb.connected})")
+                main.postDelayed(this, 20_000)
+            }
+        } }
+        batteryPoll = poll; poll.run()
+    }
     override fun onStop() {
         super.onStop(); away = true
         rain.pause()
@@ -230,8 +261,8 @@ class HomeActivity : Activity() {
         super.onNewIntent(i)
         endRest()
         if (i != null && i.hasExtra("rain")) { setIntent(i); rain.want(i.getBooleanExtra("rain", false)) }
-        // adb: --ez readlog true, Android's question about the log asked again (the battery)
-        if (i?.getBooleanExtra("readlog", false) == true) { BatteryLog.restart(); return }
+        // adb: --ez selfadb true, the home's own "Allow debugging?" asked again (the battery)
+        if (i?.getBooleanExtra("selfadb", false) == true) { startExactBattery(); return }
         if (i != null && (i.hasExtra("config_b64") || i.hasExtra("ha_b64") || i.hasExtra("trakt_b64") || i.hasExtra("sony_b64") || i.hasExtra("uc_b64"))) { app.couchtv.launcher.storeExtras(this, i); restart() }
         // Home pressed while the home is in front: back to the start
         if (zone == "side") side.close(false)

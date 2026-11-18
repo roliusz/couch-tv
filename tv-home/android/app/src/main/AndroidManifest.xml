@@ -6,9 +6,6 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- fork: a few seconds awake as the TV goes off, to tell the Remote 3 (RemoteSync.kt) -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <!-- fork: the XGIMI's battery, which its own software writes only to the log (BatteryLog.kt);
-         granted by apply.sh with READ_LOGS=1, never asked for in the app -->
-    <uses-permission android:name="android.permission.READ_LOGS" tools:ignore="ProtectedPermissions" />
     <!-- fork: the doorbell card over whatever is playing (granted by apply.sh over ADB) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
