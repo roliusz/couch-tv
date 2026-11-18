@@ -185,7 +185,7 @@ class BatteryRing(ctx: Context, private val home: HomeActivity) : View(ctx) {
         num.textSize = Ui.r(if (level >= 100) 1.15f else 1.4f)
         if (!rough) c.drawText("$level", w / 2, h / 2 + num.textSize * 0.36f, num)
         // the bolt sits in the ring's opening at the bottom, clear of the number
-        if (charging) { val bs = Ui.r(0.7f); Icons.bolt.draw(c, w / 2 - bs / 2, h / 2 + r * 0.62f, bs, ink, 2f) }
+        if (charging) { val bs = Ui.r(1f); Icons.bolt.draw(c, w / 2 - bs / 2, h / 2 + r * 0.52f, bs, ink, 2.4f) }
     }
 }
 
