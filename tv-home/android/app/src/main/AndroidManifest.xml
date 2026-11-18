@@ -28,6 +28,8 @@
         <intent><action android:name="android.settings.DISPLAY_SETTINGS" /></intent>
         <intent><action android:name="android.settings.SOUND_SETTINGS" /></intent>
         <intent><action android:name="com.android.tv.action.VIEW_SOUND_SETTINGS" /></intent>
+        <!-- fork: the XGIMI's rough battery level, from its widget for the Google TV home -->
+        <provider android:authorities="tvlauncher.widget" />
         <intent><action android:name="com.google.android.tv.action.VIEW_INPUTS" /></intent>
         <intent><action android:name="android.media.tv.action.SETUP_INPUTS" /></intent>
         <!-- A file picker, for the photos in Home settings (many TVs have none). -->

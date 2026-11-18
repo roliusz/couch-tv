@@ -148,6 +148,8 @@ class VpnPill(ctx: Context, private val home: HomeActivity) : View(ctx) {
 class BatteryRing(ctx: Context, private val home: HomeActivity) : View(ctx) {
     private val face = Glass.Face()
     var level = -1; var charging = false
+    /** A rough level only (XGIMI's widget): the arc, no number. */
+    var rough = false
     private val track = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
     private val arc = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
     private val num = Ui.paint(Ui.interBold, 1f).apply { textAlign = Paint.Align.CENTER }
@@ -180,7 +182,7 @@ class BatteryRing(ctx: Context, private val home: HomeActivity) : View(ctx) {
         if (level > 0) c.drawArc(box, 135f, 270f * level / 100f, false, arc)
         num.color = ink
         val ty = h / 2 + num.textSize * 0.36f - (if (charging) Ui.r(0.25f) else 0f)
-        c.drawText("$level", w / 2, ty, num)
+        if (!rough) c.drawText("$level", w / 2, ty, num)
         if (charging) Icons.bolt.draw(c, w / 2 - Ui.r(0.45f), ty + Ui.r(0.2f), Ui.r(0.9f), ink, 2f)
     }
 }

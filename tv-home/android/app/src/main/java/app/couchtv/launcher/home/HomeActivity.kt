@@ -141,7 +141,8 @@ class HomeActivity : Activity() {
         // the XGIMI keeps its battery from Android: read from what its battery display logs
         // Android asks the household once per start whether the home may read the log; asked while
         // the home is still rising in, its own window closed the question unanswered, so: settled first
-        main.postDelayed({ BatteryLog.start { lv, chg -> battery.showLevel(lv); battery.showPlugged(chg) } }, 4000)
+        if (BatteryLog.wanted()) io.execute { BatteryLog.rough(this)?.let { (lv, chg) -> main.post { if (!BatteryLog.got) { battery.rough = true; battery.showLevel(lv); battery.showPlugged(chg) } } } }
+        main.postDelayed({ BatteryLog.start { lv, chg -> battery.rough = false; battery.showLevel(lv); battery.showPlugged(chg); battery.invalidate() } }, 4000)
         root.shadow(np, { Ui.r(2.25f) }, { if (onLight(np)) 24f else 14f }, { if (onLight(np)) 8f else 8f }, { if (onLight(np)) 0x40000000 else 0x1F000000 })
         root.shadow(npWide, { Ui.r(2.75f) }, { 14f }, { 8f }, { 0x1F000000 })
         root.shadow(toast, { Ui.r(2f) }, { Ui.r(1.5f) }, { Ui.r(0.375f) }, { if (onLight(toast)) 0x40000000 else 0x26000000 })
