@@ -164,7 +164,7 @@ class BatteryRing(ctx: Context, private val home: HomeActivity) : View(ctx) {
         visibility = if (show) VISIBLE else GONE
         invalidate(); (parent as? View)?.invalidate()
     }
-    /** Plugged in: the bolt under the number. */
+    /** Plugged in: the bolt in the ring's opening at the bottom. */
     fun showPlugged(p: Boolean) { if (p != charging) { charging = p; invalidate() } }
     override fun onMeasure(w: Int, h: Int) { val d = Ui.r(3.75f).toInt(); setMeasuredDimension(d, d) }
     override fun onDraw(c: Canvas) {
@@ -178,12 +178,14 @@ class BatteryRing(ctx: Context, private val home: HomeActivity) : View(ctx) {
         // a 270° arc open at the bottom, filled clockwise from its lower left end
         track.strokeWidth = sw; track.color = Ui.alpha(ink, 0.28f)
         c.drawArc(box, 135f, 270f, false, track)
-        arc.strokeWidth = sw; arc.color = if (level < 20 && !charging) 0xFFFF5A52.toInt() else ink
+        arc.strokeWidth = sw; arc.color = if (level < 20) 0xFFFF5A52.toInt() else ink   // under 20%: red, charging or not
         if (level > 0) c.drawArc(box, 135f, 270f * level / 100f, false, arc)
+        // the number alone in the middle, as large as fits inside the ring ("100" a little smaller)
         num.color = ink
-        val ty = h / 2 + num.textSize * 0.36f - (if (charging) Ui.r(0.25f) else 0f)
-        if (!rough) c.drawText("$level", w / 2, ty, num)
-        if (charging) Icons.bolt.draw(c, w / 2 - Ui.r(0.45f), ty + Ui.r(0.2f), Ui.r(0.9f), ink, 2f)
+        num.textSize = Ui.r(if (level >= 100) 1.15f else 1.4f)
+        if (!rough) c.drawText("$level", w / 2, h / 2 + num.textSize * 0.36f, num)
+        // the bolt sits in the ring's opening at the bottom, clear of the number
+        if (charging) { val bs = Ui.r(0.7f); Icons.bolt.draw(c, w / 2 - bs / 2, h / 2 + r * 0.62f, bs, ink, 2f) }
     }
 }
 
