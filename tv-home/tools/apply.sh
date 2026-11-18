@@ -95,8 +95,10 @@ CFG64=$("$PY" "$HERE/home-config.py")
 # fork: Home Assistant scenes for the sidebar. ha.json (address and scenes) and ha-token.txt (the
 # long-lived access token, written by you, never printed) sit next to config.json; git ignores both.
 HA64=""
-if [ -f "$ROOT/ha.json" ] && [ -f "$ROOT/ha-token.txt" ]; then
-  HA64=$("$PY" -c 'import base64,json,sys; h=json.load(open(sys.argv[1])); h["token"]=open(sys.argv[2]).read().strip(); print(base64.b64encode(json.dumps(h,separators=(",",":")).encode()).decode())' "$ROOT/ha.json" "$ROOT/ha-token.txt")
+# fork: another TV or projector can have its own (HA_JSON=devices/bedroom/ha.json: its room, its speaker)
+HA_JSON="${HA_JSON:-$ROOT/ha.json}"
+if [ -f "$HA_JSON" ] && [ -f "$ROOT/ha-token.txt" ]; then
+  HA64=$("$PY" -c 'import base64,json,sys; h=json.load(open(sys.argv[1])); h["token"]=open(sys.argv[2]).read().strip(); print(base64.b64encode(json.dumps(h,separators=(",",":")).encode()).decode())' "$HA_JSON" "$ROOT/ha-token.txt")
 fi
 # fork: the Trakt API app's ID (and secret, older apps only) (trakt.json, written by you, git ignores it)
 TRAKT64=""
@@ -112,10 +114,12 @@ TMDB64=""
 [ -f "$ROOT/tmdb.json" ] && TMDB64=$("$PY" -c 'import base64,json,sys; t=json.load(open(sys.argv[1])); print(base64.b64encode(json.dumps({"api_key":t["api_key"]},separators=(",",":")).encode()).decode())' "$ROOT/tmdb.json")
 # fork: the Remote 3 that follows the TV (uc-remote.json: host, api_key, activity; written by you, git ignores it)
 UC64=""
-[ -f "$ROOT/uc-remote.json" ] && UC64=$("$PY" -c 'import base64,json,sys; t=json.load(open(sys.argv[1])); print(base64.b64encode(json.dumps({k:t[k] for k in ("host","api_key","activity")},separators=(",",":")).encode()).decode())' "$ROOT/uc-remote.json")
+UC_REMOTE="${UC_REMOTE:-$ROOT/uc-remote.json}"   # UC_REMOTE=none: a TV the Remote 3 does not follow
+[ -f "$UC_REMOTE" ] && UC64=$("$PY" -c 'import base64,json,sys; t=json.load(open(sys.argv[1])); print(base64.b64encode(json.dumps({k:t[k] for k in ("host","api_key","activity")},separators=(",",":")).encode()).decode())' "$UC_REMOTE")
 # fork: the TV's IP control key for quick settings (sony-psk.txt, written by you, git ignores it)
 SONY64=""
-[ -f "$ROOT/sony-psk.txt" ] && SONY64=$("$PY" -c 'import base64,sys; print(base64.b64encode(open(sys.argv[1]).read().strip().encode()).decode())' "$ROOT/sony-psk.txt")
+SONY_PSK="${SONY_PSK:-$ROOT/sony-psk.txt}"   # SONY_PSK=none: not a Sony
+[ -f "$SONY_PSK" ] && SONY64=$("$PY" -c 'import base64,sys; print(base64.b64encode(open(sys.argv[1]).read().strip().encode()).decode())' "$SONY_PSK")
 "$PY" "$T" shell "am force-stop app.couchtv.launcher; am start -n $HOME_ACT --es bridge ${BRIDGE_URL:-none} --es config_b64 $CFG64 ${HA64:+--es ha_b64 $HA64} ${TRAKT64:+--es trakt_b64 $TRAKT64} ${TMDB64:+--es tmdb_b64 $TMDB64} ${SONY64:+--es sony_b64 $SONY64} ${UC64:+--es uc_b64 $UC64} ${TV_ID:+--es tv $TV_ID}"
 
 # Tell the bridge's daily guard what to keep switched off (a Google TV update can switch it back

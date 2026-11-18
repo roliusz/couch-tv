@@ -55,7 +55,9 @@ class Ha(private val ctx: Context) {
     // ---- the living room ----
     data class Light(val id: String, val name: String, var on: Boolean, val available: Boolean, var brightness: Int?)
     data class Climate(val name: String, var mode: String, var action: String, val current: Double?, var target: Double?, val min: Double, val max: Double, val step: Double)
-    data class Room(val label: String, val lights: List<Light>, val scenes: List<Pair<String, String>>, val climate: Climate?)
+    /** A blind or shade: open, closed or between; position 0 (closed) to 100 (open) when it reports one. */
+    data class Cover(val id: String, val name: String, var state: String, var position: Int?, val available: Boolean)
+    data class Room(val label: String, val lights: List<Light>, val scenes: List<Pair<String, String>>, val climate: Climate?, val covers: List<Cover> = emptyList())
 
     fun room(done: (Room?) -> Unit) {
         val h = cfg() ?: return main.post { done(null) }.let { }
@@ -76,8 +78,29 @@ class Ha(private val ctx: Context) {
                     if (a.has("temperature") && !a.isNull("temperature")) a.optDouble("temperature") else null,
                     a.optDouble("min_temp", 16.0), a.optDouble("max_temp", 30.0), a.optDouble("target_temp_step", 0.5))
             }
-            val room = if (lights.isEmpty() && climate == null) null else Room(r.optString("label"), lights, scenes, climate)
+            val cv = r.optJSONArray("covers") ?: JSONArray()
+            val covers = (0 until cv.length()).mapNotNull { i ->
+                val id = cv.optString(i); val st = get(h, "/api/states/$id") ?: return@mapNotNull null
+                val a = st.optJSONObject("attributes") ?: JSONObject()
+                Cover(id, a.optString("friendly_name", id), st.optString("state"), if (a.has("current_position")) a.optInt("current_position") else null, st.optString("state") != "unavailable")
+            }
+            val room = if (lights.isEmpty() && climate == null && covers.isEmpty()) null else Room(r.optString("label"), lights, scenes, climate, covers)
             main.post { done(room) }
+        }
+    }
+    /** Open, close, or to a position (0 closed to 100 open); only a shade the room lists. */
+    fun cover(id: String, open: Boolean? = null, position: Int? = null, after: () -> Unit) {
+        val h = cfg() ?: return
+        val ids = h.optJSONObject("room")?.optJSONArray("covers") ?: return
+        if ((0 until ids.length()).none { ids.optString(it) == id }) return
+        io.execute {
+            val body = JSONObject().put("entity_id", id)
+            when {
+                position != null -> post(h, "cover/set_cover_position", body.put("position", position.coerceIn(0, 100)))
+                open == true -> post(h, "cover/open_cover", body)
+                open == false -> post(h, "cover/close_cover", body)
+            }
+            main.postDelayed(after, 2500)
         }
     }
     fun light(id: String, on: Boolean, pct: Int?, after: () -> Unit) {

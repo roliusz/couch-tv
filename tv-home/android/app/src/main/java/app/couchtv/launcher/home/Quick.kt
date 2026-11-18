@@ -177,6 +177,14 @@ class QuickPanel(private val act: QuickActivity) : View(act) {
         // off, the panel stays), one Scenes tile with each scene (OK runs it)
         home?.let { r ->
             fun short(n: String) = n.removePrefix(r.label).trim().ifEmpty { n }
+            // the room's shade: open or closed
+            for (cv in r.covers) tiles.add(Tile(cv.name, Icons.shade, r.label).apply {
+                options = listOf(L.t("hc_open"), L.t("hc_closed"))
+                value = { coverWords(cv) }
+                dim = { !cv.available }
+                take = { k -> val open = k == 0; cv.position = if (open) 100 else 0; cv.state = if (open) "opening" else "closing"; invalidate()
+                    ha?.cover(cv.id, open = open) { act.room() } }
+            })
             if (r.lights.isNotEmpty()) tiles.add(Tile(L.t("hc_lights"), Icons.bulb, r.label).apply {
                 list = { r.lights.map { l -> short(l.name) + " · " + (if (!l.available) "—" else if (l.on) L.t("qp_on") else L.t("qp_off")) } }
                 value = { val n = r.lights.count { it.on }; if (n > 0) L.t("hc_lit", "n" to n, "m" to r.lights.size) else L.t("hc_off") }
@@ -191,6 +199,9 @@ class QuickPanel(private val act: QuickActivity) : View(act) {
                 take = { k -> val (id, name) = r.scenes[k]; ha?.run(id) { ok -> say(if (ok) name else L.t("qp_failed")) } }
             })
         }
+        // not a Sony: the room's tiles, then the TV's own settings (its picture, sound and inputs
+        // come from the maker's own screens, Device.kt)
+        if (!Sony.isSony) { addDeviceTiles(); addSettings(); settle(was, wasAt); return }
         // audio output
         val outs = listOf("speaker" to L.t("qp_tv_speakers"), "audioSystem" to AS)
         tiles.add(Tile(L.t("qp_audio_output"), Icons.qsOutput).apply {
@@ -254,10 +265,18 @@ class QuickPanel(private val act: QuickActivity) : View(act) {
             take = { k -> val m = mins[k]
                 if (m == 0 || !needKey()) { Sleep.set(ctx, m); invalidate(); if (m > 0) say(L.t("qp_left", "n" to m)) } }
         })
+        addSettings()
+        settle(was, wasAt)
+    }
+    /** Picture, Sound and Inputs on a TV that is not a Sony: its maker's own screens (none yet). */
+    private fun addDeviceTiles() {}
+    private fun addSettings() {
         tiles.add(Tile(L.t("qp_settings"), Icons.gear).apply {
             link = true
-            take = { try { ctx.startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (e: Exception) {}; act.finish() }
+            take = { try { act.startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (e: Exception) {}; act.finish() }
         })
+    }
+    private fun settle(was: String?, wasAt: Int) {
         fi = tiles.indexOfFirst { it.title == was }.takeIf { it >= 0 } ?: 0
         if (was == null || (home != null && first)) { fi = 0; first = false }
         tiles.forEach { pickCurrent(it) }

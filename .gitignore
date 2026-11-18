@@ -52,3 +52,6 @@ tv-home/web/avatars/
 # fork: the household's own scene photos
 tv-home/web/backgrounds/mine/
 scene-photos/
+
+# fork: each extra TV or projector's own Home Assistant file and settings (devices/<name>/)
+devices/

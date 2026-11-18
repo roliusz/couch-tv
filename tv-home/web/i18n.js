@@ -255,7 +255,14 @@
     hc_media: "Now Playing",
     hc_n_playing: "{n} playing",
     hc_media_hint: "Left and right pick a control · OK presses it · Back closes",
-    hc_media_list_hint: "Up and down pick one · OK shows its controls · Back closes"
+    hc_media_list_hint: "Up and down pick one · OK shows its controls · Back closes",
+    hc_shade: "Shade",
+    hc_open: "Open",
+    hc_closed: "Closed",
+    hc_opening: "Opening…",
+    hc_closing: "Closing…",
+    hc_pct_open: "{n}% open",
+    hc_shade_hint: "Left and right move it · OK opens or closes it · Back closes"
   };
 
   S.es = {
@@ -495,7 +502,14 @@
     hc_media: "Reproduciendo",
     hc_n_playing: "{n} reproduciendo",
     hc_media_hint: "Izquierda y derecha eligen un control · OK lo pulsa · Atrás cierra",
-    hc_media_list_hint: "Arriba y abajo eligen uno · OK muestra sus controles · Atrás cierra"
+    hc_media_list_hint: "Arriba y abajo eligen uno · OK muestra sus controles · Atrás cierra",
+    hc_shade: "Persiana",
+    hc_open: "Abierta",
+    hc_closed: "Cerrada",
+    hc_opening: "Abriendo…",
+    hc_closing: "Cerrando…",
+    hc_pct_open: "Abierta al {n}%",
+    hc_shade_hint: "Izquierda y derecha la mueven · OK la abre o la cierra · Atrás cierra"
   };
 
   // Only what Mexico says differently; everything else comes from es.

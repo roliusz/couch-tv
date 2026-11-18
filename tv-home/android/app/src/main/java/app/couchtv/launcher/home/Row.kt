@@ -206,6 +206,7 @@ class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
         val r = home.room
         if (r != null && r.lights.isNotEmpty()) out.add(Show("hc-room", L.t("hc_lights"), home = "room"))
         if (r?.climate != null) out.add(Show("hc-climate", L.t("hc_climate"), home = "climate"))
+        if (r != null && r.covers.isNotEmpty()) out.add(Show("hc-shade", L.t("hc_shade"), home = "shade"))
         if (home.store.wxShow && home.weather?.days?.isNotEmpty() == true) out.add(Show("hc-weather", L.t("hc_weather"), home = "weather"))
         return out
     }
@@ -301,7 +302,7 @@ class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
         val w = card.width.toFloat(); val h = card.height.toFloat()
         val px = Ui.r(1.25f); val py = Ui.r(1.125f)
         val kind = card.show.home
-        val icon = when (kind) { "room" -> Icons.bulb; "climate" -> Icons.thermo; "media" -> Icons.npNote; else -> Icons.cloud }
+        val icon = when (kind) { "room" -> Icons.bulb; "climate" -> Icons.thermo; "media" -> Icons.npNote; "shade" -> Icons.shade; else -> Icons.cloud }
         icon.draw(c, px, py + Ui.r(0.0625f), Ui.r(1.375f), 0xB8FFFFFF.toInt())
         c.drawText(card.show.title, px + Ui.r(1.875f), py + Ui.r(1.15f), hk)
         val r = home.room
@@ -335,6 +336,10 @@ class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
                     Level.draw(c, w - px + Ui.r(0.1875f), py + Ui.r(0.75f), true, 0xB8FFFFFF.toInt(), Paint(Paint.ANTI_ALIAS_FLAG))
                     card.postInvalidateDelayed(40)
                 }
+            }
+            "shade" -> r?.covers?.firstOrNull()?.let { cv ->
+                c.drawText(Ui.fit(big, shadeWords(cv), w - 2 * px), px, h - py - Ui.r(1.75f), big)
+                c.drawText(Ui.fit(small, if (r.covers.size > 1) r.label else cv.name, w - 2 * px), px, h - py - Ui.r(0.3f), small)
             }
             "climate" -> r?.climate?.let { cl ->
                 c.drawText(cl.current?.let { "${Math.round(it * 10) / 10.0}°".replace(".0°", "°") } ?: "–", px, h - py - Ui.r(1.75f), big)
@@ -372,6 +377,7 @@ class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
         }
         return mediaArts[u]
     }
+    fun shadeWords(cv: Ha.Cover) = coverWords(cv)
     fun climateWords(cl: Ha.Climate): String {
         val to = cl.target?.let { "${Math.round(it * 10) / 10.0}°".replace(".0°", "°") } ?: ""
         if (cl.mode == "off") return L.t("hc_off")
@@ -551,4 +557,15 @@ class Dock(ctx: Context, private val home: HomeActivity) : ShadowFrame(ctx) {
         render()
     }
     fun drop() { lift = null; home.apps.persist(); render(); home.toast.show(L.t("saved")) }
+}
+
+/** A shade in words: Open, Closed, how far open, or on its way. */
+fun coverWords(cv: Ha.Cover): String = when {
+    !cv.available -> L.t("hc_na")
+    cv.state == "opening" -> L.t("hc_opening")
+    cv.state == "closing" -> L.t("hc_closing")
+    cv.position == 100 || (cv.position == null && cv.state == "open") -> L.t("hc_open")
+    cv.position == 0 || cv.state == "closed" -> L.t("hc_closed")
+    cv.position != null -> L.t("hc_pct_open", "n" to cv.position)
+    else -> L.t("hc_open")
 }

@@ -39,6 +39,9 @@ object Sony {
         var hasKey = false; var bar = false
     }
 
+    /** This is a Sony TV: its own controls (127.0.0.1) and its soundbar are only looked for there. */
+    val isSony: Boolean get() = android.os.Build.MANUFACTURER.equals("Sony", ignoreCase = true)
+
     fun psk(ctx: Context): String? = ctx.getSharedPreferences("home", Context.MODE_PRIVATE).getString("sony_psk", null)?.takeIf { it.isNotEmpty() }
 
     private fun call(url: String, method: String, params: Any, version: String, key: String? = null): JSONObject? = try {
@@ -59,6 +62,7 @@ object Sony {
     @Volatile private var barIp: String? = null
     private var looking = false
     fun findBar(ctx: Context) {
+        if (!isSony) return
         val prefs = ctx.getSharedPreferences("home", Context.MODE_PRIVATE)
         if (barIp == null) barIp = prefs.getString("soundbar_ip", null)
         if (looking) return
@@ -94,6 +98,7 @@ object Sony {
     /** Everything the panel shows, read in the background. */
     fun read(ctx: Context, done: (State) -> Unit) {
         val key = psk(ctx)
+        if (!isSony) { main.post { done(State()) }; return }
         io.execute {
             val s = State(); s.hasKey = key != null
             first(call("$TV/sony/audio", "getSoundSettings", JSONObject().put("target", "outputTerminal"), "1.1"))

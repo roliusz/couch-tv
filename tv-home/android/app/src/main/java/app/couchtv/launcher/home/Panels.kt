@@ -28,6 +28,7 @@ class HomePanel(ctx: Context, private val home: HomeActivity) : View(ctx) {
     private val hint = Ui.paint(Ui.inter, 1.375f, 0x99FFFFFF.toInt()).apply { textAlign = Paint.Align.CENTER }
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private var climateSend: Runnable? = null
+    private var shadeSend: Runnable? = null
     init { visibility = INVISIBLE; fade.snap(0f) }
 
     private var backdrop: Bitmap? = null
@@ -75,6 +76,17 @@ class HomePanel(ctx: Context, private val home: HomeActivity) : View(ctx) {
                 val nb = (Math.round((b + dx * 10) / 10.0) * 10).toInt().coerceIn(0, 100)
                 setLight(l, nb > 0, if (nb > 0) nb else null)
             }
+        } else if (kind == "shade") {
+            if (dy != 0) { i = (i + dy).coerceIn(0, r.covers.size - 1); invalidate(); return }
+            val cv = r.covers.getOrNull(i) ?: return
+            if (dx != 0 && cv.available) {
+                // 10% a press; several presses send one change
+                val p = (((cv.position ?: if (cv.state == "closed") 0 else 100) + dx * 10) / 10 * 10).coerceIn(0, 100)
+                cv.position = p; cv.state = if (p > 0) "open" else "closed"
+                invalidate(); home.shelf.invalidateGlass()
+                shadeSend?.let { removeCallbacks(it) }
+                shadeSend = Runnable { home.ha.cover(cv.id, position = p) { home.askRoom() } }.also { postDelayed(it, 700) }
+            }
         } else if (kind == "climate" && dx != 0) {
             val cl = r.climate ?: return
             if (cl.mode == "off" || cl.target == null) return
@@ -110,6 +122,14 @@ class HomePanel(ctx: Context, private val home: HomeActivity) : View(ctx) {
                 return
             }
             val l = r.lights[i]; if (l.available) setLight(l, !l.on, null)
+        } else if (kind == "shade") {
+            // OK: all the way open, or all the way closed
+            val cv = r.covers.getOrNull(i) ?: return
+            if (!cv.available) return
+            val open = (cv.position ?: if (cv.state == "closed") 0 else 100) < 50
+            cv.position = if (open) 100 else 0; cv.state = if (open) "opening" else "closing"
+            invalidate(); home.shelf.invalidateGlass()
+            home.ha.cover(cv.id, open = open) { home.askRoom() }
         } else if (kind == "climate") {
             val cl = r.climate ?: return
             val on = cl.mode == "off"
@@ -124,7 +144,7 @@ class HomePanel(ctx: Context, private val home: HomeActivity) : View(ctx) {
         val w = width.toFloat(); val h = height.toFloat()
         face.draw(c, w, h, 0f, 0f, 0f, 0xB30A0A0E.toInt(), backdrop = backdrop)
         val x0 = Ui.r(7.5f); val y0 = Ui.r(6f); val mainX = x0 + Ui.r(26f + 5f)
-        c.drawText(L.t(when (k) { "room" -> "hc_lights"; "climate" -> "hc_climate"; "media" -> "hc_media"; else -> "hc_weather" }), x0, y0 + Ui.r(2.7f), h2)
+        c.drawText(L.t(when (k) { "room" -> "hc_lights"; "climate" -> "hc_climate"; "media" -> "hc_media"; "shade" -> "hc_shade"; else -> "hc_weather" }), x0, y0 + Ui.r(2.7f), h2)
         val r = home.room
         var hintText = ""
         when (k) {
@@ -144,6 +164,15 @@ class HomePanel(ctx: Context, private val home: HomeActivity) : View(ctx) {
                     ctl(c, mainX, y0, L.t("hc_scenes"), r.scenes[at - r.lights.size].second, -1f, L.t("hc_scene_run"), true, 0, small = true)
                     hintText = L.t("hc_scene_hint")
                 }
+            }
+            "shade" -> if (r != null && r.covers.isNotEmpty()) {
+                val at = i.coerceIn(0, r.covers.size - 1)
+                if (r.covers.size > 1) { var y = y0 + Ui.r(5.5f); r.covers.forEachIndexed { n, cv -> y = listRow(c, x0, y, cv.name, n == at, (cv.position ?: 0) > 0 || cv.state == "open") } }
+                val cv = r.covers[at]
+                val pos = cv.position ?: if (cv.state == "closed") 0 else 100
+                ctl(c, if (r.covers.size > 1) mainX else x0, y0, cv.name, if (cv.position != null) "$pos%" else home.shelf.shadeWords(cv), pos / 100f,
+                    home.shelf.shadeWords(cv), cv.available && pos > 0, 0xFFFFE0A3.toInt())
+                hintText = L.t("hc_shade_hint")
             }
             "media" -> {
                 val ps = home.players
