@@ -27,6 +27,24 @@ class KeyCatcher : AccessibilityService() {
         }
         return true   // the press and its release are ours
     }
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    private var lastGuard = 0L
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        val e = event ?: return
+        if (e.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        if (e.packageName?.toString() != GOOGLE_HOME) return
+        // The event names the window's view, not the activity. With that home meant to be off,
+        // any window of its own means it is back.
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastGuard < 1500) return
+        lastGuard = now
+        android.util.Log.w("KeyCatcher", "the Google TV home came up: back to couch-tv")
+        try {
+            startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                .setClassName(this, "app.couchtv.launcher.home.HomeActivity")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED))
+        } catch (x: Exception) { android.util.Log.w("KeyCatcher", "guard: $x") }
+    }
     override fun onInterrupt() {}
+
+    companion object { const val GOOGLE_HOME = "com.google.android.apps.tv.launcherx" }
 }

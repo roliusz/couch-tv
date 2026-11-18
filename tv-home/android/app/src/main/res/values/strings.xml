@@ -2,5 +2,5 @@
 <resources>
     <!-- fork: shown in Settings, Accessibility, for KeyCatcher.kt -->
     <string name="keycatcher_label">Quick Settings button</string>
-    <string name="keycatcher_description">Lets the remote\'s quick settings (gear) button open the home\'s Quick Settings over whatever is playing. It watches for that one button only and reads nothing on the screen.</string>
+    <string name="keycatcher_description">Lets the remote\'s quick settings (gear) button open the home\'s Quick Settings over whatever is playing. It also notices when the Google TV home opens and brings this home back. It reads nothing on the screen.</string>
 </resources>

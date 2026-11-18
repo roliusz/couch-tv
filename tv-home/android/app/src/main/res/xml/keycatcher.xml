@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- fork: KeyCatcher.kt. It asks for one thing only: to see key presses, so the remote's
-     dashboard (gear) button can open Quick Settings. It reads no screen content. -->
+<!-- fork: KeyCatcher.kt. It sees key presses, so the remote's dashboard (gear) button can open
+     Quick Settings, and it hears when a window of the Google TV home opens (that package only),
+     so it can put couch-tv back if that home comes back on by itself. It reads no screen content. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/keycatcher_description"
-    android:accessibilityEventTypes="typeAnnouncement"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:packageNames="com.google.android.apps.tv.launcherx"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagRequestFilterKeyEvents"
     android:canRequestFilterKeyEvents="true"
