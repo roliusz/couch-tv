@@ -69,7 +69,9 @@ class HomePanel(ctx: Context, private val home: HomeActivity) : View(ctx) {
         }
         val r = home.room ?: return
         if (kind == "room") {
-            if (dy != 0) { i = (i + dy).coerceIn(0, r.lights.size + r.scenes.size - 1); invalidate(); return }
+            // the lights, then the room's shade, then the scenes
+            if (dy != 0) { i = (i + dy).coerceIn(0, r.lights.size + r.covers.size + r.scenes.size - 1); invalidate(); return }
+            r.covers.getOrNull(i - r.lights.size)?.takeIf { i >= r.lights.size }?.let { cv -> moveShade(cv, dx); return }
             val l = r.lights.getOrNull(i) ?: return
             if (dx != 0 && l.available) {
                 val b = if (l.on) (l.brightness ?: 100) else 0
@@ -78,7 +80,12 @@ class HomePanel(ctx: Context, private val home: HomeActivity) : View(ctx) {
             }
         } else if (kind == "shade") {
             if (dy != 0) { i = (i + dy).coerceIn(0, r.covers.size - 1); invalidate(); return }
-            val cv = r.covers.getOrNull(i) ?: return
+            r.covers.getOrNull(i)?.let { moveShade(it, dx) }
+        } else if (kind == "climate" && dx != 0) {
+            climateStep(r, dx)
+        }
+    }
+    private fun moveShade(cv: Ha.Cover, dx: Int) {
             if (dx != 0 && cv.available) {
                 // 10% a press; several presses send one change
                 val p = (((cv.position ?: if (cv.state == "closed") 0 else 100) + dx * 10) / 10 * 10).coerceIn(0, 100)
@@ -87,7 +94,8 @@ class HomePanel(ctx: Context, private val home: HomeActivity) : View(ctx) {
                 shadeSend?.let { removeCallbacks(it) }
                 shadeSend = Runnable { home.ha.cover(cv.id, position = p) { home.askRoom() } }.also { postDelayed(it, 700) }
             }
-        } else if (kind == "climate" && dx != 0) {
+    }
+    private fun climateStep(r: Ha.Room, dx: Int) {
             val cl = r.climate ?: return
             if (cl.mode == "off" || cl.target == null) return
             val st = if (cl.step > 0) cl.step else 0.5
@@ -95,7 +103,13 @@ class HomePanel(ctx: Context, private val home: HomeActivity) : View(ctx) {
             invalidate(); home.shelf.invalidateGlass()
             climateSend?.let { removeCallbacks(it) }
             climateSend = Runnable { home.ha.climate(target = cl.target) { home.askRoom() } }.also { postDelayed(it, 700) }   // several presses send one change
-        }
+    }
+    private fun toggleShade(cv: Ha.Cover) {
+        if (!cv.available) return
+        val open = (cv.position ?: if (cv.state == "closed") 0 else 100) < 50
+        cv.position = if (open) 100 else 0; cv.state = if (open) "opening" else "closing"
+        invalidate(); home.shelf.invalidateGlass()
+        home.ha.cover(cv.id, open = open) { home.askRoom() }
     }
     private fun setLight(l: Ha.Light, on: Boolean, pct: Int?) {
         l.on = on; if (pct != null) l.brightness = pct
@@ -116,20 +130,15 @@ class HomePanel(ctx: Context, private val home: HomeActivity) : View(ctx) {
         }
         val r = home.room ?: return
         if (kind == "room") {
+            if (i >= r.lights.size && i < r.lights.size + r.covers.size) { toggleShade(r.covers[i - r.lights.size]); return }
             if (i >= r.lights.size) {
-                val sc = r.scenes.getOrNull(i - r.lights.size) ?: return
+                val sc = r.scenes.getOrNull(i - r.lights.size - r.covers.size) ?: return
                 home.ha.run(sc.first) { }; home.toast.show(sc.second); postDelayed({ home.askRoom() }, 2500)
                 return
             }
             val l = r.lights[i]; if (l.available) setLight(l, !l.on, null)
         } else if (kind == "shade") {
-            // OK: all the way open, or all the way closed
-            val cv = r.covers.getOrNull(i) ?: return
-            if (!cv.available) return
-            val open = (cv.position ?: if (cv.state == "closed") 0 else 100) < 50
-            cv.position = if (open) 100 else 0; cv.state = if (open) "opening" else "closing"
-            invalidate(); home.shelf.invalidateGlass()
-            home.ha.cover(cv.id, open = open) { home.askRoom() }
+            r.covers.getOrNull(i)?.let { toggleShade(it) }
         } else if (kind == "climate") {
             val cl = r.climate ?: return
             val on = cl.mode == "off"
@@ -144,24 +153,31 @@ class HomePanel(ctx: Context, private val home: HomeActivity) : View(ctx) {
         val w = width.toFloat(); val h = height.toFloat()
         face.draw(c, w, h, 0f, 0f, 0f, 0xB30A0A0E.toInt(), backdrop = backdrop)
         val x0 = Ui.r(7.5f); val y0 = Ui.r(6f); val mainX = x0 + Ui.r(26f + 5f)
-        c.drawText(L.t(when (k) { "room" -> "hc_lights"; "climate" -> "hc_climate"; "media" -> "hc_media"; "shade" -> "hc_shade"; else -> "hc_weather" }), x0, y0 + Ui.r(2.7f), h2)
+        c.drawText(L.t(when (k) { "room" -> if (home.room?.covers?.isNotEmpty() == true) "hc_lights_shade" else "hc_lights"; "climate" -> "hc_climate"; "media" -> "hc_media"; "shade" -> "hc_shade"; else -> "hc_weather" }), x0, y0 + Ui.r(2.7f), h2)
         val r = home.room
         var hintText = ""
         when (k) {
             "room" -> if (r != null) {
                 var y = y0 + Ui.r(5.5f)
-                val at = i.coerceIn(0, r.lights.size + r.scenes.size - 1)
+                val nl = r.lights.size; val nc = r.covers.size
+                val at = i.coerceIn(0, nl + nc + r.scenes.size - 1)
                 r.lights.forEachIndexed { n, l -> y = listRow(c, x0, y, l.name, n == at, l.on) }
+                r.covers.forEachIndexed { n, cv -> y = listRow(c, x0, y, cv.name, nl + n == at, (cv.position ?: if (cv.state == "closed") 0 else 100) > 0) }
                 if (r.scenes.isNotEmpty()) { y += Ui.r(1.5f); c.drawText(L.t("hc_scenes"), x0 + Ui.r(1.25f), y + Ui.r(1.2f), sub); y += Ui.r(2.125f) }
-                r.scenes.forEachIndexed { n, s -> y = listRow(c, x0, y, s.second, r.lights.size + n == at, true) }
+                r.scenes.forEachIndexed { n, s -> y = listRow(c, x0, y, s.second, nl + nc + n == at, true) }
                 val l = r.lights.getOrNull(at)
-                if (l != null) {
+                val cvAt = if (at >= nl) r.covers.getOrNull(at - nl) else null
+                if (cvAt != null) {
+                    val pos = cvAt.position ?: if (cvAt.state == "closed") 0 else 100
+                    ctl(c, mainX, y0, cvAt.name, if (cvAt.position != null) "$pos%" else coverWords(cvAt), pos / 100f, coverWords(cvAt), cvAt.available && pos > 0, 0xFFFFE0A3.toInt())
+                    hintText = L.t("hc_shade_hint")
+                } else if (l != null) {
                     val b = if (l.on) (l.brightness ?: 100) else 0
                     if (!l.available) ctl(c, mainX, y0, l.name, "–", 0f, L.t("hc_na"), false, 0)
                     else ctl(c, mainX, y0, l.name, if (l.on) "$b%" else L.t("hc_off"), b / 100f, if (l.on) L.t("hc_on") else L.t("hc_off"), l.on, 0xFFFFC074.toInt())
                     hintText = L.t("hc_room_hint")
                 } else {
-                    ctl(c, mainX, y0, L.t("hc_scenes"), r.scenes[at - r.lights.size].second, -1f, L.t("hc_scene_run"), true, 0, small = true)
+                    ctl(c, mainX, y0, L.t("hc_scenes"), r.scenes[at - nl - nc].second, -1f, L.t("hc_scene_run"), true, 0, small = true)
                     hintText = L.t("hc_scene_hint")
                 }
             }

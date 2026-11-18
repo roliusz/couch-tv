@@ -186,20 +186,19 @@ class QuickPanel(private val act: QuickActivity) : View(act) {
         // off, the panel stays), one Scenes tile with each scene (OK runs it)
         home?.let { r ->
             fun short(n: String) = n.removePrefix(r.label).trim().ifEmpty { n }
-            // the room's shade: open or closed
-            for (cv in r.covers) tiles.add(Tile(cv.name, Icons.shade, r.label).apply {
-                options = listOf(L.t("hc_open"), L.t("hc_closed"))
-                value = { coverWords(cv) }
-                dim = { !cv.available }
-                take = { k -> val open = k == 0; cv.position = if (open) 100 else 0; cv.state = if (open) "opening" else "closing"; invalidate()
-                    ha?.cover(cv.id, open = open) { act.room() } }
-            })
-            if (r.lights.isNotEmpty()) tiles.add(Tile(L.t("hc_lights"), Icons.bulb, r.label).apply {
-                list = { r.lights.map { l -> short(l.name) + " · " + (if (!l.available) "—" else if (l.on) L.t("qp_on") else L.t("qp_off")) } }
+            // the lights, and the room's shade after them in the same list (OK opens or closes it)
+            if (r.lights.isNotEmpty() || r.covers.isNotEmpty()) tiles.add(Tile(L.t(if (r.covers.isNotEmpty()) "hc_lights_shade" else "hc_lights"), Icons.bulb, r.label).apply {
+                list = { r.lights.map { l -> short(l.name) + " · " + (if (!l.available) "—" else if (l.on) L.t("qp_on") else L.t("qp_off")) } +
+                    r.covers.map { cv -> short(cv.name) + " · " + coverWords(cv) } }
                 value = { val n = r.lights.count { it.on }; if (n > 0) L.t("hc_lit", "n" to n, "m" to r.lights.size) else L.t("hc_off") }
                 take = { k ->
-                    val l = r.lights[k]
-                    if (l.available) { l.on = !l.on; invalidate(); ha?.light(l.id, l.on, null) { act.room() } }
+                    val l = r.lights.getOrNull(k)
+                    if (l != null) { if (l.available) { l.on = !l.on; invalidate(); ha?.light(l.id, l.on, null) { act.room() } } }
+                    else r.covers.getOrNull(k - r.lights.size)?.takeIf { it.available }?.let { cv ->
+                        val open = (cv.position ?: if (cv.state == "closed") 0 else 100) < 50
+                        cv.position = if (open) 100 else 0; cv.state = if (open) "opening" else "closing"; invalidate()
+                        ha?.cover(cv.id, open = open) { act.room() }
+                    }
                 }
             })
             if (r.scenes.isNotEmpty()) tiles.add(Tile(L.t("qp_scenes"), Icons.qsScene, r.label).apply {

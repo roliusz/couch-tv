@@ -40,7 +40,24 @@
     };
   }
   function ready() { try { TVRain.ready(); } catch (e) {} }
-  window.rainBackground = function (url) {
+  // A new scene: the old picture fades into the new one in 16 steps over the scene's 1.6 s, each
+  // step handed to the library as its background, as the dashboard fades its rain picture.
+  var last = null, mix = document.createElement("canvas"), fading = 0;
+  function crossfade(from, to, ms) {
+    var run = ++fading, steps = 16, k = 0;
+    mix.width = to.naturalWidth || to.width; mix.height = to.naturalHeight || to.height;
+    var g = mix.getContext("2d");
+    (function step() {
+      if (run !== fading || !fx) return;
+      k += 1;
+      var t = k / steps; t = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;   // ease in and out
+      g.globalAlpha = 1; g.drawImage(from, 0, 0, mix.width, mix.height);
+      g.globalAlpha = t; g.drawImage(to, 0, 0, mix.width, mix.height); g.globalAlpha = 1;
+      fx.setBackground(k >= steps ? to : mix);
+      if (k < steps) setTimeout(step, ms / steps);
+    })();
+  }
+  window.rainBackground = function (url, fadeMs) {
     var job = (building || Promise.resolve()).then(function () { return load(url); }).then(function (img) {
       if (!fx) {
         var s = size(); canvas.width = s[0]; canvas.height = s[1];
@@ -53,11 +70,15 @@
                               backgroundBlurSteps: Math.max(1, Math.round(d)),
                               mist: false });
         sharpen(fx);
+        last = img;
         return fx.setBackground(img).then(function () { return fx.start(); }).then(function () {
           // shown once it has really painted: two frames, as the dashboard waits
           requestAnimationFrame(function () { requestAnimationFrame(ready); });
         });
       }
+      var from = last; last = img;
+      if (fadeMs > 0 && from) { crossfade(from, img, fadeMs); return; }
+      fading++;
       return fx.setBackground(img);
     }).catch(function (e) { try { TVRain.failed(String(e && e.message || e)); } catch (x) {} });
     building = job;

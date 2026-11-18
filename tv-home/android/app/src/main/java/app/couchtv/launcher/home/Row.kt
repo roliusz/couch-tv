@@ -140,6 +140,47 @@ class VpnPill(ctx: Context, private val home: HomeActivity) : View(ctx) {
     }
 }
 
+/**
+ * The battery, top right, on a device that has one (a portable projector): a glass circle with an
+ * arc open at the bottom that fills with the charge, and the percentage in the middle. Charging,
+ * a small bolt under the number; under 20%, the arc turns red.
+ */
+class BatteryRing(ctx: Context, private val home: HomeActivity) : View(ctx) {
+    private val face = Glass.Face()
+    var level = -1; var charging = false
+    private val track = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+    private val arc = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+    private val num = Ui.paint(Ui.interBold, 1f).apply { textAlign = Paint.Align.CENTER }
+    private val box = RectF()
+    init { visibility = GONE }
+    fun update(pct: Int, plugged: Boolean) {
+        val show = pct in 0..100
+        if (pct == level && plugged == charging && (visibility == VISIBLE) == show) return
+        level = pct; charging = plugged
+        visibility = if (show) VISIBLE else GONE
+        invalidate(); (parent as? View)?.invalidate()
+    }
+    override fun onMeasure(w: Int, h: Int) { val d = Ui.r(3.75f).toInt(); setMeasuredDimension(d, d) }
+    override fun onDraw(c: Canvas) {
+        val w = width.toFloat(); val h = height.toFloat()
+        val loc = Glass.settled(this)
+        val light = home.onLight(this)
+        face.draw(c, w, h, h / 2, loc[0].toFloat(), loc[1].toFloat(), if (light) Glass.WASH_LIGHT else Glass.WASH)
+        val ink = if (light) 0xFF1D1D1F.toInt() else 0xEBFFFFFF.toInt()
+        val sw = Ui.r(0.25f); val r = w / 2 - Ui.r(0.6f)
+        box.set(w / 2 - r, h / 2 - r, w / 2 + r, h / 2 + r)
+        // a 270° arc open at the bottom, filled clockwise from its lower left end
+        track.strokeWidth = sw; track.color = Ui.alpha(ink, 0.28f)
+        c.drawArc(box, 135f, 270f, false, track)
+        arc.strokeWidth = sw; arc.color = if (level < 20 && !charging) 0xFFFF5A52.toInt() else ink
+        if (level > 0) c.drawArc(box, 135f, 270f * level / 100f, false, arc)
+        num.color = ink
+        val ty = h / 2 + num.textSize * 0.36f - (if (charging) Ui.r(0.25f) else 0f)
+        c.drawText("$level", w / 2, ty, num)
+        if (charging) Icons.bolt.draw(c, w / 2 - Ui.r(0.45f), ty + Ui.r(0.2f), Ui.r(0.9f), ink, 2f)
+    }
+}
+
 /** The glass bubble that drops in at the top with a message, and slides away by itself. */
 class ToastView(ctx: Context) : View(ctx) {
     var home: HomeActivity? = null
@@ -204,9 +245,9 @@ class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
         // something playing comes first in the row
         if (home.players.isNotEmpty()) out.add(Show("hc-media", L.t("hc_media"), home = "media"))
         val r = home.room
-        if (r != null && r.lights.isNotEmpty()) out.add(Show("hc-room", L.t("hc_lights"), home = "room"))
+        // the lights, and the room's shade with them on the one card
+        if (r != null && (r.lights.isNotEmpty() || r.covers.isNotEmpty())) out.add(Show("hc-room", L.t(if (r.covers.isNotEmpty()) "hc_lights_shade" else "hc_lights"), home = "room"))
         if (r?.climate != null) out.add(Show("hc-climate", L.t("hc_climate"), home = "climate"))
-        if (r != null && r.covers.isNotEmpty()) out.add(Show("hc-shade", L.t("hc_shade"), home = "shade"))
         if (home.store.wxShow && home.weather?.days?.isNotEmpty() == true) out.add(Show("hc-weather", L.t("hc_weather"), home = "weather"))
         return out
     }
@@ -309,8 +350,11 @@ class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
         when (kind) {
             "room" -> if (r != null) {
                 val lit = r.lights.count { it.on }
-                c.drawText(Ui.fit(big, if (lit > 0) L.t("hc_lit", "n" to lit, "m" to r.lights.size) else L.t("hc_off"), w - 2 * px), px, h - py - Ui.r(1.75f), big)
-                c.drawText(Ui.fit(small, r.label, w - 2 * px), px, h - py - Ui.r(0.3f), small)
+                val head = if (r.lights.isEmpty()) r.covers.firstOrNull()?.let { coverWords(it) } ?: "" else if (lit > 0) L.t("hc_lit", "n" to lit, "m" to r.lights.size) else L.t("hc_off")
+                c.drawText(Ui.fit(big, head, w - 2 * px), px, h - py - Ui.r(1.75f), big)
+                // the shade beside the room's name: "Bedroom · Shade: Closed"
+                val shade = r.covers.firstOrNull()?.takeIf { r.lights.isNotEmpty() }?.let { L.t("hc_shade_now", "s" to coverWords(it)) }
+                c.drawText(Ui.fit(small, listOfNotNull(r.label.ifEmpty { null }, shade).joinToString(" · "), w - 2 * px), px, h - py - Ui.r(0.3f), small)
             }
             // what is playing, as the other cards put a room: one thing, its song and where; several, how many and where
             "media" -> home.players.let { ps ->

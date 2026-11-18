@@ -135,6 +135,8 @@ class SceneView(ctx: Context) : View(ctx) {
     var thumb: Bitmap? = null
     /** The picture behind the glass changed (a crossfade frame, the clock): the glass blurs it again. */
     var onChange: (() -> Unit)? = null
+    /** A new scene is coming in (not the first). */
+    var onSceneChange: (() -> Unit)? = null
     val current: Scene? get() = front?.scene
     private var fadeT = 1f
     private var glideT = 1f
@@ -142,13 +144,16 @@ class SceneView(ctx: Context) : View(ctx) {
     private val ease = android.view.animation.PathInterpolator(0.42f, 0f, 0.58f, 1f)
     private val glideEase = android.view.animation.PathInterpolator(0.45f, 0f, 0.2f, 1f)
     private var anim: android.animation.ValueAnimator? = null
+    /** While it rains the background on screen is the rain's own picture, which changes after this
+     *  fade; the glass then waits for it ([Rain.kt] fades the glass with the rain's picture). */
+    var holdGlass: () -> Boolean = { false }
     private fun fadeTo(from: Float) {
         anim?.cancel()
         if (Motion.calm || from >= 1f) { fadeT = 1f; glideT = 1f; Glass.t = 1f; Glass.old = null; invalidate(); onChange?.invoke(); return }
         anim = android.animation.ValueAnimator.ofFloat(0f, 1f).setDuration(1600).apply {
             interpolator = null
-            addUpdateListener { v -> val t = v.animatedValue as Float; fadeT = ease.getInterpolation(t); glideT = glideEase.getInterpolation(t); Glass.t = fadeT; invalidate(); onChange?.invoke() }
-            addListener(object : android.animation.AnimatorListenerAdapter() { override fun onAnimationEnd(an: android.animation.Animator) { fadeT = 1f; glideT = 1f; back = null; Glass.t = 1f; Glass.old = null; invalidate(); onChange?.invoke() } })
+            addUpdateListener { v -> val t = v.animatedValue as Float; fadeT = ease.getInterpolation(t); glideT = glideEase.getInterpolation(t); if (!holdGlass()) Glass.t = fadeT; invalidate(); onChange?.invoke() }
+            addListener(object : android.animation.AnimatorListenerAdapter() { override fun onAnimationEnd(an: android.animation.Animator) { fadeT = 1f; glideT = 1f; back = null; if (!holdGlass()) { Glass.t = 1f; Glass.old = null }; invalidate(); onChange?.invoke() } })
             start()
         }
     }
@@ -173,6 +178,7 @@ class SceneView(ctx: Context) : View(ctx) {
                 // the glass: the new scene's frosted picture, crossfading with the old one
                 Glass.old = if (back == null) null else Glass.now
                 Glass.now = frosted; Glass.t = if (back == null) 1f else 0f
+                if (back != null) onSceneChange?.invoke()
                 fadeT = 0f; glideT = 0f
                 fadeTo(if (back == null) 1f else 0f)
                 onShown?.invoke(s)

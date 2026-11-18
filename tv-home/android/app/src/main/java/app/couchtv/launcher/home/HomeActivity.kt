@@ -91,6 +91,7 @@ class HomeActivity : Activity() {
         date = DateLine(this, this)
         tab = SideTab(this, this)
         vpn = VpnPill(this, this)
+        battery = BatteryRing(this, this)
         shelf = Shelf(this, this)
         dock = Dock(this, this)
         panel = HomePanel(this, this)
@@ -110,6 +111,7 @@ class HomeActivity : Activity() {
         root.addView(tab, FrameLayout.LayoutParams(-2, -2).apply { leftMargin = Ui.ri(5f); topMargin = Ui.ri(3.75f) })
         root.addView(vpn, FrameLayout.LayoutParams(-2, -2).apply { leftMargin = Ui.ri(5f); topMargin = Ui.ri(3.75f) })
         root.addView(np, FrameLayout.LayoutParams(-2, -2, Gravity.END).apply { rightMargin = Ui.ri(5f); topMargin = Ui.ri(3.75f) })
+        root.addView(battery, FrameLayout.LayoutParams(-2, -2, Gravity.END).apply { rightMargin = Ui.ri(5f); topMargin = Ui.ri(3.5f) })
         root.addView(npWide, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { leftMargin = Ui.ri(5f); rightMargin = Ui.ri(5f); bottomMargin = Ui.ri(2.875f) })
         root.addView(panel, mp, mp)
         root.addView(side, mp, mp)
@@ -119,6 +121,17 @@ class HomeActivity : Activity() {
         // over a light background the white glass gets a deeper shadow, so its shape still shows
         root.shadow(tab, { tab.height / 2f }, { if (onLight(tab)) 20f else 14f }, { if (onLight(tab)) 6f else 8f }, { if (onLight(tab)) 0x40000000 else 0x1F000000 })
         root.shadow(vpn, { vpn.height / 2f }, { if (onLight(vpn)) 20f else 14f }, { if (onLight(vpn)) 6f else 8f }, { if (onLight(vpn)) 0x40000000 else 0x1F000000 })
+        root.shadow(battery, { battery.height / 2f }, { if (onLight(battery)) 20f else 14f }, { if (onLight(battery)) 6f else 8f }, { if (onLight(battery)) 0x40000000 else 0x1F000000 })
+        // the battery, on a device that has one: read now, and on every change
+        registerReceiver(object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context, i: Intent) {
+                val present = i.getBooleanExtra(android.os.BatteryManager.EXTRA_PRESENT, false)
+                val lv = i.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1); val sc = i.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100)
+                val st = i.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1)
+                val chg = st == android.os.BatteryManager.BATTERY_STATUS_CHARGING || st == android.os.BatteryManager.BATTERY_STATUS_FULL
+                battery.update(if (present && lv >= 0 && sc > 0) lv * 100 / sc else -1, chg)
+            }
+        }, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         root.shadow(np, { Ui.r(2.25f) }, { if (onLight(np)) 24f else 14f }, { if (onLight(np)) 8f else 8f }, { if (onLight(np)) 0x40000000 else 0x1F000000 })
         root.shadow(npWide, { Ui.r(2.75f) }, { 14f }, { 8f }, { 0x1F000000 })
         root.shadow(toast, { Ui.r(2f) }, { Ui.r(1.5f) }, { Ui.r(0.375f) }, { if (onLight(toast)) 0x40000000 else 0x26000000 })
@@ -130,9 +143,9 @@ class HomeActivity : Activity() {
         main.postDelayed({ if (!sceneUp) { sceneUp = true; if (riseWaiting) { riseWaiting = false; comeBack() } } }, 2500)
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
 
-        Glass.listeners.add { dock.invalidateGlass(); shelf.invalidateGlass(); tab.invalidate(); vpn.invalidate(); np.invalidate(); toast.invalidate() }
+        Glass.listeners.add { dock.invalidateGlass(); shelf.invalidateGlass(); tab.invalidate(); vpn.invalidate(); battery.invalidate(); np.invalidate(); toast.invalidate() }
         // the VPN pill keeps to the tab's side, whatever the tab is doing
-        root.viewTreeObserver.addOnPreDrawListener { vpn.follow(tab); true }
+        root.viewTreeObserver.addOnPreDrawListener { vpn.follow(tab); if (battery.translationY != np.translationY) { battery.translationY = np.translationY; battery.invalidate() }; true }
         // whether a VPN is on (NordVPN): the pill shows while one is up
         getSystemService(android.net.ConnectivityManager::class.java)?.registerNetworkCallback(
             android.net.NetworkRequest.Builder()
@@ -150,6 +163,8 @@ class HomeActivity : Activity() {
             if (!sceneUp) { sceneUp = true; if (riseWaiting) { riseWaiting = false; afterTwoFrames { comeBack() } } }
         }
         scene.onChange = { glassDirty(); rain.again() }
+        scene.onSceneChange = { rain.sceneChanged() }
+        scene.holdGlass = { rain.holding }
         buildScenes()
         tick()
         refreshWeather()
@@ -171,6 +186,7 @@ class HomeActivity : Activity() {
 
     private var away = false
     lateinit var vpn: VpnPill
+    lateinit var battery: BatteryRing
     override fun onStop() {
         super.onStop(); away = true
         rain.pause()
@@ -270,7 +286,8 @@ class HomeActivity : Activity() {
     fun askRoom() {
         ha.room { r -> room = r; shelf.homeChanged(); panel.redraw() }
         // adb: am start ... --ez rain true, to see the rain whatever the weather
-        if (intent?.getBooleanExtra("rain", false) == true) rain.want(true)
+        // (and --ez rain false keeps it off until the home is started again without it)
+        if (intent?.hasExtra("rain") == true) rain.want(intent.getBooleanExtra("rain", false))
         else ha.raining { r -> if (r != null) rain.want(r) }
         main.removeCallbacks(roomAgain); main.postDelayed(roomAgain, 60000)
     }

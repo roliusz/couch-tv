@@ -81,6 +81,7 @@ class RainLayer(private val home: HomeActivity) : FrameLayout(home) {
     private fun stop() {
         Log.i(TAG, "raining: off")
         main.removeCallbacks(rebuild)
+        sceneFade = false; releaseGlass()
         fade.to(0f, 0.6f)
         main.postDelayed({ if (!on) drop() }, 900)
     }
@@ -95,6 +96,13 @@ class RainLayer(private val home: HomeActivity) : FrameLayout(home) {
     /** The home went away (another app) or came back: the rain's own clock stops and starts with it. */
     fun pause() { web?.let { it.onPause(); it.pauseTimers() } }
     fun resume() { web?.let { it.resumeTimers(); it.onResume() }; if (on) again() }
+
+    /** Holding the glass on the old scene until the rain's picture changes with it. */
+    val holding get() = on && web != null && shown > 0.5f
+    private var sceneFade = false
+    private var glassAnim: android.animation.ValueAnimator? = null
+    /** A new scene: the next picture crossfades in (1.6 s, as the scenes do), the glass with it. */
+    fun sceneChanged() { if (holding) sceneFade = true }
 
     /** What is beneath has changed: a new picture for the rain, once things settle. */
     fun again() {
@@ -112,9 +120,28 @@ class RainLayer(private val home: HomeActivity) : FrameLayout(home) {
             bmp.compress(Bitmap.CompressFormat.JPEG, 92, out)
             bmp.recycle()
             val url = "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
-            main.post { if (web === w) w.evaluateJavascript("rainBackground('$url')", null) }
+            main.post {
+                if (web !== w) return@post
+                val fadeMs = if (sceneFade) 1600 else 0
+                sceneFade = false
+                w.evaluateJavascript("rainBackground('$url', $fadeMs)", null)
+                if (fadeMs > 0) fadeGlass(fadeMs.toLong())
+            }
         }
     }
+
+    /** The glass's own crossfade to the new scene, in step with the rain's picture. */
+    private fun fadeGlass(ms: Long) {
+        glassAnim?.cancel()
+        if (Glass.old == null) { Glass.t = 1f; Glass.changed(); return }
+        glassAnim = android.animation.ValueAnimator.ofFloat(Glass.t, 1f).setDuration(ms).apply {
+            interpolator = android.view.animation.PathInterpolator(0.42f, 0f, 0.58f, 1f)
+            addUpdateListener { Glass.t = it.animatedValue as Float; Glass.changed() }
+            addListener(object : android.animation.AnimatorListenerAdapter() { override fun onAnimationEnd(a: android.animation.Animator) { Glass.t = 1f; Glass.old = null; Glass.changed() } })
+            start()
+        }
+    }
+    private fun releaseGlass() { glassAnim?.cancel(); if (Glass.old != null) { Glass.t = 1f; Glass.old = null; Glass.changed() } }
 
     // ---- the picture beneath, at full size, drawn as the screen draws it ----
     private var r: HardwareRenderer? = null
