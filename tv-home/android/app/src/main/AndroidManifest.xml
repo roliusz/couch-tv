@@ -20,6 +20,10 @@
         <!-- The TV's input list, for the Input quick button when there is no bridge. -->
         <intent><action android:name="android.settings.TV_INPUT_SETTINGS" /></intent>
         <intent><action android:name="com.android.tv.action.VIEW_INPUTS" /></intent>
+        <!-- fork: Quick Settings' Picture and Sound on a TV that is not a Sony (the maker's own screens) -->
+        <intent><action android:name="android.settings.DISPLAY_SETTINGS" /></intent>
+        <intent><action android:name="android.settings.SOUND_SETTINGS" /></intent>
+        <intent><action android:name="com.android.tv.action.VIEW_SOUND_SETTINGS" /></intent>
         <intent><action android:name="com.google.android.tv.action.VIEW_INPUTS" /></intent>
         <intent><action android:name="android.media.tv.action.SETUP_INPUTS" /></intent>
         <!-- A file picker, for the photos in Home settings (many TVs have none). -->
@@ -106,7 +110,28 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="couchtv" android:host="quick" />
             </intent-filter>
+            <!-- the remote's dashboard key (the gear on the XGIMI's remote): with the Google TV home
+                 switched off, the system asks whoever answers these, so the key opens (and closes)
+                 Quick Settings over whatever is playing -->
+            <intent-filter>
+                <action android:name="android.app.action.TOGGLE_NOTIFICATION_HANDLER_PANEL" />
+                <action android:name="android.app.action.OPEN_NOTIFICATION_HANDLER_PANEL" />
+                <action android:name="android.app.action.CLOSE_NOTIFICATION_HANDLER_PANEL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
         <receiver android:name=".home.SleepReceiver" android:exported="false" />
+        <!-- fork: the remote's gear button opens Quick Settings (KeyCatcher.kt); switched on by the
+             household in Settings, Accessibility -->
+        <service
+            android:name=".KeyCatcher"
+            android:exported="true"
+            android:label="@string/keycatcher_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/keycatcher" />
+        </service>
     </application>
 </manifest>

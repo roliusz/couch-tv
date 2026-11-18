@@ -25,6 +25,8 @@ class QuickActivity : Activity() {
     private lateinit var panel: QuickPanel
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
+        // asked only to close (the dashboard key's close) while not open: nothing to do
+        if (intent?.action == "android.app.action.CLOSE_NOTIFICATION_HANDLER_PANEL") { finish(); return }
         Ui.init(this); L.load(this)
         panel = QuickPanel(this)
         setContentView(panel)
@@ -32,7 +34,14 @@ class QuickActivity : Activity() {
         load()
     }
     // the hamburger key again while it is open closes it, as Sony's gear does
-    override fun onNewIntent(intent: Intent?) { super.onNewIntent(intent); if (panel.isOpen) panel.close() else load() }
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        when (intent?.action) {
+            "android.app.action.CLOSE_NOTIFICATION_HANDLER_PANEL" -> panel.close()
+            "android.app.action.OPEN_NOTIFICATION_HANDLER_PANEL" -> if (!panel.isOpen) load()
+            else -> if (panel.isOpen) panel.close() else load()
+        }
+    }
     private val ha by lazy { Ha(this) }
     fun load() {
         Sony.read(this) { s -> panel.show(s) }
@@ -268,8 +277,34 @@ class QuickPanel(private val act: QuickActivity) : View(act) {
         addSettings()
         settle(was, wasAt)
     }
-    /** Picture, Sound and Inputs on a TV that is not a Sony: its maker's own screens (none yet). */
-    private fun addDeviceTiles() {}
+    /** Picture, Sound and Inputs on a TV that is not a Sony: the maker's own screens, opened by the
+     *  standard Android TV requests (on the XGIMI: its Picture Settings and Sound panels), and the
+     *  TV's inputs, each one directly, or Google's input switcher. */
+    private fun addDeviceTiles() {
+        val ctx = act
+        fun opens(i: Intent) = ctx.packageManager.resolveActivity(i, 0) != null
+        fun go(i: Intent) { try { ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (e: Exception) {}; act.finish() }
+        Intent(android.provider.Settings.ACTION_DISPLAY_SETTINGS).takeIf(::opens)?.let { i ->
+            tiles.add(Tile(L.t("qp_picture"), Icons.picture).apply { link = true; take = { go(i) } }) }
+        listOf(Intent("com.android.tv.action.VIEW_SOUND_SETTINGS"), Intent(android.provider.Settings.ACTION_SOUND_SETTINGS)).firstOrNull(::opens)?.let { i ->
+            tiles.add(Tile(L.t("qp_sound"), Icons.qsVolume).apply { link = true; take = { go(i) } }) }
+        // the HDMI inputs by name, then Google's switcher for the rest
+        val hdmi = try {
+            (ctx.getSystemService(Context.TV_INPUT_SERVICE) as android.media.tv.TvInputManager).tvInputList
+                .filter { it.type == android.media.tv.TvInputInfo.TYPE_HDMI && it.parentId == null }
+                .distinctBy { it.id }
+        } catch (e: Exception) { emptyList() }
+        val all = Intent("com.android.tv.action.VIEW_INPUTS").takeIf(::opens)
+        if (hdmi.isNotEmpty() || all != null) tiles.add(Tile(L.t("qp_inputs"), Icons.input).apply {
+            options = hdmi.map { it.loadLabel(ctx).toString().ifEmpty { "HDMI" } } + listOfNotNull(all?.let { L.t("qp_all_inputs") })
+            link = true
+            take = { k ->
+                val inp = hdmi.getOrNull(k)
+                if (inp != null) go(Intent(Intent.ACTION_VIEW, android.media.tv.TvContract.buildChannelUriForPassthroughInput(inp.id)))
+                else all?.let { go(it) }
+            }
+        })
+    }
     private fun addSettings() {
         tiles.add(Tile(L.t("qp_settings"), Icons.gear).apply {
             link = true
