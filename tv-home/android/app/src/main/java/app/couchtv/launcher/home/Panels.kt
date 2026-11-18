@@ -379,7 +379,7 @@ class NowPlayingCard(ctx: Context, private val home: HomeActivity) : View(ctx) {
         c.drawText(Ui.fit(artist, p.artist, tw), tx, y + Ui.r(1.5f), artist)
         // the level meter (nowplaying.css): each bar on its own slow beat
         Level.draw(c, w - pad - Ui.r(0.25f) + Ui.r(0.1875f) - Ui.r(0.375f), pad + a / 2, p.state == "playing", if (light) 0x80000000.toInt() else 0x99FFFFFF.toInt(), fill)
-        if (p.state == "playing") postInvalidateDelayed(40)
+        if (Level.moves(p.state == "playing")) postInvalidateDelayed(40)
         // time
         val ty = pad + a + Ui.r(1.375f)
         val pos = p.position.coerceAtMost(if (p.duration > 0) p.duration else Double.MAX_VALUE)

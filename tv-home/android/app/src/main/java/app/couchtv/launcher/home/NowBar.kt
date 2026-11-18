@@ -13,9 +13,16 @@ object Level {
     private val DUR = floatArrayOf(900f, 700f, 1000f, 800f, 950f)
     private val DELAY = floatArrayOf(0f, -300f, -150f, -450f, -600f)
     private fun ease(t: Float) = if (t < 0.5f) 2 * t * t else 1 - (-2 * t + 2).let { it * it } / 2
+    /** A small, slow device (the XGIMI projector): the bars stand still while playing, in a fixed
+     *  level, so nothing redraws 25 times a second for them (each redraw repaints the glass). */
+    val still: Boolean get() = Ui.slow
+    /** Whether a playing meter needs redrawing to move. */
+    fun moves(playing: Boolean) = playing && !still
+    private val STILL = floatArrayOf(0.55f, 0.95f, 0.7f, 1f, 0.45f)
     /** Each bar's height, 0.25 to 1, at this moment; still bars sit at 0.3. */
     fun at(k: Int, playing: Boolean): Float {
         if (!playing) return 0.3f
+        if (still) return STILL[k]
         val now = (System.nanoTime() / 1_000_000L % 3_600_000L).toFloat() - DELAY[k]
         val d = DUR[k]
         val cycle = (now / d).toInt(); var t = (now % d) / d
@@ -116,7 +123,7 @@ class NowBar(ctx: Context, private val home: HomeActivity?) : View(ctx) {
             fill.color = if (amb) Color.WHITE else 0xC7FFFFFF.toInt(); val f = if (dur > 0) (shown / dur).toFloat().coerceIn(0f, 1f) else 0f
             c.drawRoundRect(b0, cy - Ui.r(0.25f), b0 + (b1 - b0) * f, cy + Ui.r(0.25f), Ui.r(0.5f), Ui.r(0.5f), fill)
         }
-        if (playing) postInvalidateDelayed(40)   // the level moves
+        if (Level.moves(playing)) postInvalidateDelayed(40)   // the level moves
     }
     private fun mmss(s: Double): String { val t = Math.max(0, Math.round(s).toInt()); return "${t / 60}:" + (if (t % 60 < 10) "0" else "") + (t % 60) }
 }

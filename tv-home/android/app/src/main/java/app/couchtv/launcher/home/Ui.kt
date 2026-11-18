@@ -19,7 +19,16 @@ object Ui {
     lateinit var interBold: Typeface
     lateinit var antonio: Typeface
 
+    /** A small, slow device (under 2.5 GB of memory, as the XGIMI MoGo 4's 1.8; the Sony has 2.9): what moves all the time
+     *  stands still there (the level meters), so the home is free for the remote. */
+    var slow = false
+
     fun init(ctx: Context) {
+        slow = try {
+            val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            val mi = android.app.ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
+            am.isLowRamDevice || mi.totalMem < 2560L * 1024 * 1024
+        } catch (e: Exception) { false }
         val dm = ctx.resources.displayMetrics
         width = maxOf(dm.widthPixels, dm.heightPixels); height = minOf(dm.widthPixels, dm.heightPixels)
         rem = width / 120f

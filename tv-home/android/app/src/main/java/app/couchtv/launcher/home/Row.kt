@@ -378,7 +378,7 @@ class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
                 }
                 if (ps.any { it.state == "playing" }) {   // the level meter, on its slow beat
                     Level.draw(c, w - px + Ui.r(0.1875f), py + Ui.r(0.75f), true, 0xB8FFFFFF.toInt(), Paint(Paint.ANTI_ALIAS_FLAG))
-                    card.postInvalidateDelayed(40)
+                    if (Level.moves(true)) card.postInvalidateDelayed(40)
                 }
             }
             "shade" -> r?.covers?.firstOrNull()?.let { cv ->
