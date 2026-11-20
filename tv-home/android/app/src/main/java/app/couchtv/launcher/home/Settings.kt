@@ -175,7 +175,6 @@ class SettingsScreen(ctx: Context, private val home: HomeActivity) : FrameLayout
         val secsNow = (home.store.sceneMs / 1000).toInt()
         val steps = listOf(10, 15, 20, 30, 45, 60, 120)
         rows.add(SRow("cycle", "scene-secs", L.t("scene_secs"), L.t("n_secs", "n" to secsNow), act = { val i = steps.indexOf(secsNow); st.put("scene_seconds", if (i < 0) 20 else steps[(i + 1) % steps.size]); save(); home.buildScenes() }))
-        rows.add(SRow("cycle", "clock", L.t("clock"), if (home.store.clock24) L.t("clock_24") else L.t("clock_12"), act = { st.put("clock", if (home.store.clock24) "12h" else "24h"); save() }))
         rows.add(head(L.t("photos_head")))
         if (pickIntent() != null) rows.add(SRow("action", "photo-pick", L.t("photos_pick"), sub = L.t("photos_pick_sub"), act = { pickPhotos() }))
         else rows.add(info("photo-nopick", L.t("photos_no_pick"), null, L.t("photos_no_pick_sub")))

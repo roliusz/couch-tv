@@ -84,7 +84,8 @@ class Store(val ctx: Context) {
     fun saveSettings() { keep("tvhome.settings", JSONObject().put("s", st).put("updated", System.currentTimeMillis()).put("pending", true)) }
 
     // ---- Home settings, as the web home reads them (readConfig) ----
-    val clock24 get() = (st.optString("clock").ifEmpty { home.optString("clock") }) == "24h"
+    /** The clock always reads 24-hour (the user's choice); no 12-hour setting. */
+    val clock24 get() = true
     val wxShow get() = st.optBoolean("wx_show", true)
     val wxF get() = st.optString("wx_unit") == "f"
     val wxEvery get() = st.optInt("wx_every", 30).let { if (it in listOf(15, 30, 60)) it else 30 }
