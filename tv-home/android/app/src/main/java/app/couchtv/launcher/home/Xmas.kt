@@ -41,7 +41,7 @@ object Xmas {
             spot(0.58f, 0.44f, 0.06f, 0f, 38, 140, 74, 0.24f)
         }
     }
-    /** A picture behind the frosted window: saturate(.88) brightness(1.06) and half the dashboard's
+    /** A picture behind the frosted window: saturate(.88) brightness(1.06) and under a third of the dashboard's
      *  blur(0.5vw), which read too heavy on a TV; at half size. Premultiplied while blurring, so a cut-out's edge does not pick up black. */
     fun frosted(src: Bitmap): Bitmap {
         val soft = if (src.config == Bitmap.Config.HARDWARE) src.copy(Bitmap.Config.ARGB_8888, false) else src
@@ -54,7 +54,7 @@ object Xmas {
         val px = IntArray(w * h); last.getPixels(px, 0, w, 0, 0, w, h)
         val cut = last.hasAlpha()
         if (cut) for (i in px.indices) { val v = px[i]; val a = v ushr 24; px[i] = (a shl 24) or (((v shr 16 and 255) * a / 255) shl 16) or (((v shr 8 and 255) * a / 255) shl 8) or ((v and 255) * a / 255) }
-        Glass.blurPixels(px, IntArray(w * h), w, h, 2)   // about 5 px on screen
+        Glass.blurPixels(px, IntArray(w * h), w, h, 1)   // about 3 px on screen
         if (cut) for (i in px.indices) { val v = px[i]; val a = v ushr 24; px[i] = if (a == 0) 0 else (a shl 24) or (minOf(255, (v shr 16 and 255) * 255 / a) shl 16) or (minOf(255, (v shr 8 and 255) * 255 / a) shl 8) or minOf(255, (v and 255) * 255 / a) }
         val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         out.setPixels(px, 0, w, 0, 0, w, h)
