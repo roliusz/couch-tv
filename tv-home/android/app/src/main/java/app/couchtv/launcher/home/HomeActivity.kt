@@ -33,6 +33,7 @@ class HomeActivity : Activity() {
     lateinit var topShelf: TopShelf
     lateinit var date: DateLine
     lateinit var rain: RainLayer
+    lateinit var snow: SnowLayer
     lateinit var tab: SideTab
     lateinit var shelf: Shelf
     lateinit var dock: Dock
@@ -106,6 +107,8 @@ class HomeActivity : Activity() {
         root.addView(date, mp, mp)
         rain = RainLayer(this)
         root.addView(rain, mp, mp)   // over the scene, its clock and the date; under everything else
+        snow = SnowLayer(this)
+        root.addView(snow, mp, mp)   // between the scene and the cards, as on the dashboard
         root.addView(shelf, mp, mp)
         root.addView(dock, mp, mp)
         root.addView(tab, FrameLayout.LayoutParams(-2, -2).apply { leftMargin = Ui.ri(5f); topMargin = Ui.ri(3.75f) })
@@ -231,7 +234,7 @@ class HomeActivity : Activity() {
     }
     override fun onStop() {
         super.onStop(); away = true
-        rain.pause()
+        rain.pause(); snow.pause(); shelf.snowPause(true)
         // while away the dock and the cards wait below the screen (and the corners above it), so
         // coming back they rise in over the scene instead of appearing on an empty screen
         tuck()
@@ -252,7 +255,7 @@ class HomeActivity : Activity() {
         }
         away = false
         glassDirty()
-        rain.resume()
+        rain.resume(); snow.resume(); shelf.snowPause(false)
         Trakt.onChange = { main.post { refresh(); settings?.traktChanged() } }
         WatchLog.onChange = { main.post { refresh() } }
         refresh(); refreshWeather(); askRoom()
@@ -261,6 +264,7 @@ class HomeActivity : Activity() {
         super.onNewIntent(i)
         endRest()
         if (i != null && i.hasExtra("rain")) { setIntent(i); rain.want(i.getBooleanExtra("rain", false)) }
+        if (i != null && i.hasExtra("snow")) { setIntent(i); askSnow() }
         // adb: --ez selfadb true, the home's own "Allow debugging?" asked again (the battery)
         if (i?.getBooleanExtra("selfadb", false) == true) { startExactBattery(); return }
         if (i != null && (i.hasExtra("config_b64") || i.hasExtra("ha_b64") || i.hasExtra("trakt_b64") || i.hasExtra("sony_b64") || i.hasExtra("uc_b64"))) { app.couchtv.launcher.storeExtras(this, i); restart() }
@@ -333,7 +337,15 @@ class HomeActivity : Activity() {
         // (and --ez rain false keeps it off until the home is started again without it)
         if (intent?.hasExtra("rain") == true) rain.want(intent.getBooleanExtra("rain", false))
         else ha.raining { r -> if (r != null) rain.want(r) }
+        askSnow()
         main.removeCallbacks(roomAgain); main.postDelayed(roomAgain, 60000)
+    }
+    /** Christmas mode's snow. adb: --ez snow true|false, whatever Home Assistant says, and
+     *  --ef snowdeep 12, with that much already lying on the cards. */
+    private fun askSnow() {
+        fun set(s: SnowSet?) { snow.want(s); shelf.snowSet(s, intent?.getFloatExtra("snowdeep", 0f) ?: 0f) }
+        if (intent?.hasExtra("snow") == true) set(if (intent.getBooleanExtra("snow", false)) SnowSet(1f, 0.3f, 15f) else null)
+        else ha.snowing { set(it) }
     }
     private val roomAgain = Runnable { askRoom() }
     fun askPlaying() {

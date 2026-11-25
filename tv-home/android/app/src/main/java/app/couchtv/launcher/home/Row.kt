@@ -220,7 +220,54 @@ class ToastView(ctx: Context) : View(ctx) {
  */
 @SuppressLint("ViewConstructor")
 class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
-    private val track = ShadowFrame(ctx)
+    /** The cards, with the snow lying on them drawn last: it stands on each card's top edge and
+     *  grows and presses with it. */
+    private val track = object : ShadowFrame(ctx) {
+        override fun dispatchDraw(c: Canvas) {
+            super.dispatchDraw(c)
+            if (drifts.isEmpty()) return
+            for (cd in cards) {
+                val d = drifts[cd.key] ?: continue
+                val n = c.save()
+                c.translate(cd.left + cd.translationX, cd.top + cd.translationY)
+                c.scale(cd.scaleX, cd.scaleY, cd.pivotX, cd.pivotY)
+                d.draw(c, cd.width.toFloat())
+                c.restoreToCount(n)
+            }
+        }
+    }
+    private val drifts = HashMap<String, Drift>()
+    private var snowNow: SnowSet? = null
+    private var snowAway = false
+    private var snowAt = 0L
+    private val snowTick = object : Runnable {
+        override fun run() {
+            val now = android.os.SystemClock.uptimeMillis()
+            val dt = ((now - snowAt) / 1000f).coerceIn(0.01f, 0.5f); snowAt = now
+            var changed = false
+            for (cd in cards) {
+                if (cd.width == 0) continue
+                val d = drifts[cd.key] ?: if (snowNow == null) continue else Drift(cards.indexOf(cd)).also { drifts[cd.key] = it }
+                if (d.step(dt, snowNow, cd.width.toFloat(), Ui.r(1.5f))) changed = true
+            }
+            if (snowNow == null && drifts.values.all { it.empty() }) { drifts.clear(); track.invalidate(); return }   // all melted: no more ticking
+            if (changed) track.invalidate()
+            postDelayed(this, 125)   // a drift creeps: 8 a second, as on the dashboard
+        }
+    }
+    /** Christmas mode (null: over, what lies there melts). deep: start with this much lying. */
+    fun snowSet(s: SnowSet?, deep: Float = 0f) {
+        if (Motion.calm) return
+        val was = snowNow; snowNow = s
+        if (s != null && was == null && deep > 0f) cards.forEachIndexed { i, cd -> if (cd.width > 0) drifts.getOrPut(cd.key) { Drift(i) }.preset(deep, cd.width.toFloat()) }
+        if (s == null && drifts.isEmpty()) return
+        snowPause(snowAway)
+    }
+    fun snowPause(away: Boolean) {
+        snowAway = away
+        removeCallbacks(snowTick)
+        if (!away && (snowNow != null || drifts.isNotEmpty())) { snowAt = android.os.SystemClock.uptimeMillis(); post(snowTick) }
+    }
     private val heads = FrameLayout(ctx).apply { clipChildren = false }
     val cards = ArrayList<CardView>()
     var s = 0
@@ -273,6 +320,7 @@ class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
         track.removeAllViews(); track.shadows.clear(); heads.removeAllViews(); cards.clear()
         all.forEachIndexed { i, sh ->
             val c = CardView(context, sh, home.shows, home.apps, if (sh.home != null) { cv: Canvas, card: CardView -> drawHome(cv, card) } else null)
+            c.key = if (sh.premiere) "premiere" else sh.id
             sh.art?.let { u -> c.art = arts[u] }
             c.screenX = { left + c.left + track.translationX }
             c.screenY = { top + translationY }
@@ -280,6 +328,7 @@ class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
             if (sh.home != null) track.shadow(c, { Ui.r(1.5f) }, { 14f + (Ui.r(2.5f) - 14f) * c.focusT }, { 8f + (Ui.r(1.5f) - 8f) * c.focusT }, { Ui.mix(0x1F000000, 0x73000000, c.focusT) })
             cards.add(c)
         }
+        if (cards.isNotEmpty()) drifts.keys.retainAll(cards.map { it.key }.toSet())
         fun head(t: String, at: Int) {
             val v = HeadText(context, t)
             heads.addView(v, LayoutParams(-2, -2).apply { leftMargin = (left + at * (cardW + gap)).toInt() })
@@ -334,7 +383,7 @@ class Shelf(ctx: Context, private val home: HomeActivity) : FrameLayout(ctx) {
     fun bump(dir: Int) {
         val c = cards.getOrNull(s) ?: return
         if (Motion.calm) return
-        val b = Spring(0f, 0.05f) { c.translationX = it }
+        val b = Spring(0f, 0.05f) { c.translationX = it; if (drifts.isNotEmpty()) track.invalidate() }
         b.to(Ui.r(0.75f) * dir, 0.1f)
         postDelayed({ b.to(0f, Motion.KICK) }, 100)
     }

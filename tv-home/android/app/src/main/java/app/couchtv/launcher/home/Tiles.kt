@@ -91,6 +91,8 @@ class CardView(ctx: Context, var show: Show, private val shows: Shows, private v
     var art: Bitmap? = null
         set(v) { field = v; blur = v?.let { bake(it) }; invalidate() }
     private var blur: Bitmap? = null
+    /** Its place in the row, whatever card object stands for it (the snow lying on it stays). */
+    var key = ""
     var screenX: () -> Float = { 0f }
     var screenY: () -> Float = { 0f }
     var turning = 1f

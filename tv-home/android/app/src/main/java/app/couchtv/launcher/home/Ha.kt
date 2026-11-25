@@ -155,6 +155,23 @@ class Ha(private val ctx: Context) {
         }
     }
 
+    // ---- snow: the dashboard's Christmas mode and its three sliders (casa-v3.js _snowOpts) ----
+    /** ha.json "snow": "flag" (an input_boolean) and, if wanted, "fall", "melt" and "depth" (input_numbers).
+     *  done(null) when it is off; not called when it could not be asked. */
+    fun snowing(done: (SnowSet?) -> Unit) {
+        val h = cfg() ?: return
+        val r = h.optJSONObject("snow") ?: return
+        val flag = r.optString("flag").takeIf { Regex("input_boolean\\.[a-z0-9_]+").matches(it) } ?: return
+        io.execute {
+            val f = get(h, "/api/states/$flag") ?: return@execute
+            fun num(key: String, d: Float): Float = r.optString(key).takeIf { Regex("input_number\\.[a-z0-9_]+").matches(it) }
+                ?.let { get(h, "/api/states/$it") }?.optString("state")?.toFloatOrNull()?.takeIf { it.isFinite() } ?: d
+            val ans = if (f.optString("state") != "on") null
+                else SnowSet((num("fall", 100f) / 100).coerceIn(0f, 2f), (num("melt", 30f) / 100).coerceIn(0f, 1f), num("depth", 15f).coerceIn(0f, 24f))
+            main.post { done(ans) }
+        }
+    }
+
     // ---- Now Playing: everything playing. ha.json's "players" (the speakers, by the names given
     // there, playing or paused) first, then any other media player Home Assistant has playing ----
     data class Playing(val state: String, val title: String, val artist: String, val picture: String?, val duration: Double, var position: Double, val speaker: String, val entity: String, val at: Long, val speakerOfOurs: Boolean = true, val listed: String? = null)
