@@ -41,11 +41,11 @@ object Xmas {
             spot(0.58f, 0.44f, 0.06f, 0f, 38, 140, 74, 0.24f)
         }
     }
-    /** A picture behind the frosted window: blur(0.5vw) saturate(.88) brightness(1.06), at a quarter
-     *  size. Premultiplied while blurring, so a cut-out's edge does not pick up black. */
+    /** A picture behind the frosted window: saturate(.88) brightness(1.06) and half the dashboard's
+     *  blur(0.5vw), which read too heavy on a TV; at half size. Premultiplied while blurring, so a cut-out's edge does not pick up black. */
     fun frosted(src: Bitmap): Bitmap {
         val soft = if (src.config == Bitmap.Config.HARDWARE) src.copy(Bitmap.Config.ARGB_8888, false) else src
-        val w = Ui.width / 4; val h = maxOf(1, w * soft.height / soft.width)
+        val w = Ui.width / 2; val h = maxOf(1, w * soft.height / soft.width)
         // halved step by step: one big shrink skips pixels and leaves the blur grainy
         var small = soft
         while (small.width > w * 2) { val n = Bitmap.createScaledBitmap(small, small.width / 2, maxOf(1, small.height / 2), true); if (small !== soft) small.recycle(); small = n }
@@ -54,7 +54,7 @@ object Xmas {
         val px = IntArray(w * h); last.getPixels(px, 0, w, 0, 0, w, h)
         val cut = last.hasAlpha()
         if (cut) for (i in px.indices) { val v = px[i]; val a = v ushr 24; px[i] = (a shl 24) or (((v shr 16 and 255) * a / 255) shl 16) or (((v shr 8 and 255) * a / 255) shl 8) or ((v and 255) * a / 255) }
-        Glass.blurPixels(px, IntArray(w * h), w, h, 2)   // about 10 px on screen
+        Glass.blurPixels(px, IntArray(w * h), w, h, 2)   // about 5 px on screen
         if (cut) for (i in px.indices) { val v = px[i]; val a = v ushr 24; px[i] = if (a == 0) 0 else (a shl 24) or (minOf(255, (v shr 16 and 255) * 255 / a) shl 16) or (minOf(255, (v shr 8 and 255) * 255 / a) shl 8) or minOf(255, (v and 255) * 255 / a) }
         val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         out.setPixels(px, 0, w, 0, 0, w, h)
