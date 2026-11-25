@@ -186,7 +186,7 @@ class HomeActivity : Activity() {
         scene.onChange = { glassDirty(); rain.again() }
         scene.onSceneChange = { rain.sceneChanged() }
         scene.holdGlass = { rain.holding }
-        // as it was left: at Christmas the home starts on a Christmas scene, not on another for a moment
+        // as it was left: at Christmas the home starts frosted, not clear for a moment
         Xmas.on = false
         if (getSharedPreferences("home", MODE_PRIVATE).getBoolean("xmas", false)) scene.frostedFromStart()
         buildScenes()
@@ -299,7 +299,7 @@ class HomeActivity : Activity() {
     fun buildScenes() {
         val all = Scenes.builtIn + Scenes.mine(this) + Scenes.own(this, store.st)
         val (order, off) = Scenes.state(all, store.st, store.home)
-        scenes = Scenes.inSeason(order.filter { it !in off }.mapNotNull { id -> all.firstOrNull { it.id == id } }, all, Xmas.on).ifEmpty { listOf(Scenes.builtIn[0]) }
+        scenes = order.filter { it !in off }.mapNotNull { id -> all.firstOrNull { it.id == id } }.ifEmpty { listOf(Scenes.builtIn[0]) }
         bag.clear()
         sceneAt = (Math.random() * scenes.size).toInt()
         // adb: am start ... --es scene water, to look at one scene (as the web home's ?scene=)
@@ -354,7 +354,6 @@ class HomeActivity : Activity() {
             if (on != Xmas.on) {
                 getSharedPreferences("home", MODE_PRIVATE).edit().putBoolean("xmas", on).apply()
                 scene.frost(on)
-                buildScenes()   // into the season's scenes
             }
             glow.want(on); snow.want(s); shelf.snowSet(s, intent?.getFloatExtra("snowdeep", 0f) ?: 0f) }
         if (intent?.hasExtra("snow") == true) set(if (intent.getBooleanExtra("snow", false)) SnowSet(1f, 0.3f, 15f) else null)
