@@ -49,11 +49,10 @@ class SnowLayer(private val home: HomeActivity) : View(home) {
     fun resume() { if (away) { away = false; invalidate() } }
 
     private fun build(s: SnowSet) {
-        // the dashboard's numbers are for a screen 960 wide (a wall panel), so twice the size here
-        val u = Ui.width / 960f; val h = Ui.height / u
+        // as the dashboard on a full 1920 x 1080 screen: small flakes, and as many as it allows
+        val u = Ui.width / 1920f; val h = Ui.height / u
         val d = s.amount.coerceIn(0f, 2f)
-        var n = if (d <= 0f) 0 else (960f * h / 9000f * d).toInt().coerceIn(18, 170)
-        if (Ui.slow) n = n * 2 / 3
+        val n = if (d <= 0f) 0 else (1920f * h / 9000f * d).toInt().coerceIn(18, 170)
         if ("$n" == key) return
         key = "$n"
         flakes = List(n) {
