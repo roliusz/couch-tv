@@ -23,7 +23,9 @@ data class Scene(
     val rimColor: Int = 0x8CFFFFFF.toInt(), val rimFill: Int = 0x1AFFFFFF, val sheen: Boolean = true,
     val shade: IntArray? = null, val shadeStops: FloatArray? = null,
     // the clock's drop shadow: offset and blur (rem) and colour; blur 0 = none
-    val shDy: Float = 0.375f, val shBlur: Float = 1.75f, val shColor: Int = 0x29000000
+    val shDy: Float = 0.375f, val shBlur: Float = 1.75f, val shColor: Int = 0x29000000,
+    // the dashboard's two flags (casa-v3-scenes.js): plays in Christmas mode, and only then
+    val xmas: Boolean = false, val xmasOnly: Boolean = false
 )
 
 object Scenes {
@@ -53,7 +55,7 @@ object Scenes {
             fun rem(sel: String, prop: String) = Regex("""\.${Regex.escape(sel)}[^{]*\{[^}]*?$prop:\s*([\d.]+)rem""").find(css)?.groupValues?.get(1)?.toFloatOrNull()
             out.add(Scene(id, name = str("name") ?: id, photo = str("photo"), fg = bool("fg"), glass = bool("glass"),
                 clockTop = rem("s-$id .gclock", "top") ?: 9.375f, clockSize = rem("s-$id .gclock", "font-size") ?: 25f,
-                dateTop = rem("scene-$id .date", "top") ?: 6f))
+                dateTop = rem("scene-$id .date", "top") ?: 6f, xmas = bool("xmas") || bool("xmasOnly"), xmasOnly = bool("xmasOnly")))
         }
         return out
     }
@@ -68,6 +70,12 @@ object Scenes {
             if (f == null && u == null) null else Scene("p-" + p.optString("id"), file = f, url = u, own = true, n = i + 1)
         }
     }
+
+    /** The scenes in season (casa-v3-scenes.js sceneList): at Christmas only its own, else all but
+     *  the Christmas-only ones; everything, should that leave none. */
+    fun inSeason(on: List<Scene>, all: List<Scene>, xmas: Boolean): List<Scene> =
+        if (xmas) on.filter { it.xmas }.ifEmpty { all.filter { it.xmas } }.ifEmpty { on }
+        else on.filter { !it.xmasOnly }.ifEmpty { on }
 
     /** Which scenes take turns and in what order (app.js sceneState). */
     fun state(all: List<Scene>, st: org.json.JSONObject, home: org.json.JSONObject): Pair<List<String>, List<String>> {
@@ -88,6 +96,8 @@ object Scenes {
             val hs = home.optJSONArray("scenes")
             var pick = if (hs == null) emptyList() else (0 until hs.length()).map { hs.optString(it) }.filter { it in builtIds }.distinct()
             if (pick.isEmpty()) pick = builtIds
+            // the Christmas-only scenes are never in the year's list: on unless switched off in Home settings
+            else pick = pick + all.filter { it.xmasOnly && it.id !in pick }.map { it.id }
             order = (pick + ids.filter { it !in pick }).toMutableList()
             off = builtIds.filter { it !in pick }.toMutableList()
         }
@@ -143,6 +153,8 @@ class SceneView(ctx: Context) : View(ctx) {
         Xmas.on = on
         refrost()
     }
+    /** Starting up in Christmas mode: frosted from the first picture. */
+    fun frostedFromStart() { Xmas.on = true; frostT = 1f }
     private fun refrost() {
         val on = Xmas.on
         io.execute {
@@ -225,7 +237,6 @@ class SceneView(ctx: Context) : View(ctx) {
                 back?.let { if (it !== front) recycle(it) }
                 back = front
                 front = shownNew
-                if (frostT < 1f && frostAnim?.isRunning == true) frostAnim?.end()
                 thumb = small
                 // the glass: the new scene's frosted picture, crossfading with the old one
                 Glass.old = if (back == null) null else Glass.now
