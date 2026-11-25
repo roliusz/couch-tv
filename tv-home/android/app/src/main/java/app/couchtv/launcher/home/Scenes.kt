@@ -103,6 +103,9 @@ object Scenes {
 class SceneView(ctx: Context) : View(ctx) {
     private class Shown(val scene: Scene, val photo: Bitmap, val fg: Bitmap?, val fill: Bitmap) {
         var a = 0f
+        // Christmas: the photo and the cut-out behind the frosted window (Xmas.kt), made when wanted
+        @Volatile var soft: Bitmap? = null
+        @Volatile var softFg: Bitmap? = null
         // drawn once and kept as textures: the photo with its shade, the clock, the cut-out
         val photoNode = RenderNode("photo").apply { setUseCompositingLayer(true, null) }
         val clockNode = RenderNode("clock").apply { setUseCompositingLayer(true, null) }
@@ -130,6 +133,52 @@ class SceneView(ctx: Context) : View(ctx) {
         set(v) { field = v; invalidate(); glassDim() }
     /** The glass's dimming: after 9 pm the photo is at 72%, and resting darkens it 18% more. */
     private fun glassDim() { Glass.dim = 1f - (if (night) 0.72f else 1f) * (1f - 0.18f * resting); onChange?.invoke() }
+    // ---- Christmas mode: the frosted window (Xmas.kt) ----
+    private var frostT = 0f
+    private var frostAnim: android.animation.ValueAnimator? = null
+    private val hazeP = Paint(Paint.FILTER_BITMAP_FLAG)
+    /** The window frosts over (or clears): the soft pictures are made, then fade in over 0.7 s (frostIn). */
+    fun frost(on: Boolean) {
+        if (on == Xmas.on) return
+        Xmas.on = on
+        refrost()
+    }
+    private fun refrost() {
+        val on = Xmas.on
+        io.execute {
+            val f = front
+            if (on && f != null) soften(f)
+            val frosted = f?.let { Glass.frostScene(it.photo, it.scene.photoDim, it.scene.shade, it.scene.shadeStops, on) }
+            val th = f?.let { thumbOf(it.photo, on) }
+            post {
+                if (on != Xmas.on) return@post
+                // the glass goes with it, unless a scene has come in meanwhile (which made its own)
+                val mine = f != null && f === front && frosted != null
+                if (mine) { anim?.end(); Glass.old = Glass.now; Glass.now = frosted; Glass.t = 0f; thumb = th }
+                frostAnim?.cancel()
+                val from = frostT; val to = if (on) 1f else 0f
+                fun at(t: Float, k: Float) { frostT = t; if (mine && f === front) { Glass.t = k; if (k >= 1f) Glass.old = null; Glass.changed() }; invalidate(); onChange?.invoke() }
+                if (Motion.calm) { at(to, 1f); return@post }
+                frostAnim = android.animation.ValueAnimator.ofFloat(0f, 1f).setDuration(700).apply {
+                    addUpdateListener { v -> val k = v.animatedValue as Float; at(from + (to - from) * k, k) }
+                    addListener(object : android.animation.AnimatorListenerAdapter() { override fun onAnimationEnd(a: android.animation.Animator) { if (!Xmas.on) { front?.let { it.soft = null; it.softFg = null } } } })
+                    start()
+                }
+            }
+        }
+    }
+    private fun soften(s: Shown) { try { if (s.soft == null) s.soft = Xmas.frosted(s.photo); if (s.softFg == null) s.fg?.let { s.softFg = Xmas.frosted(it) } } catch (e: Throwable) {} }
+    /** The scene at 192 x 108, as the screen shows it (hazed at Christmas), for reading how light it is. */
+    private fun thumbOf(photo: Bitmap, xmas: Boolean): Bitmap {
+        val src = if (photo.config == Bitmap.Config.HARDWARE) photo.copy(Bitmap.Config.ARGB_8888, false) else photo
+        val small = Bitmap.createScaledBitmap(src, 192, 108, true)
+        if (src !== photo && src !== small) src.recycle()
+        if (!xmas) return small
+        val b = small.copy(Bitmap.Config.ARGB_8888, true)
+        Canvas(b).drawBitmap(Xmas.haze, null, RectF(0f, 0f, 192f, 108f), Paint(Paint.FILTER_BITMAP_FLAG))
+        return b
+    }
+
     var onShown: ((Scene) -> Unit)? = null
     /** The photo at 192 x 108, for reading how light it is behind the glass (adapt.js). */
     var thumb: Bitmap? = null
@@ -167,13 +216,16 @@ class SceneView(ctx: Context) : View(ctx) {
             val fill = glassCopy ?: Glass.frost(photo)
             // kept on the graphics chip, so coming back to the home never waits to upload it again
             val hw = photo.copy(Bitmap.Config.HARDWARE, false) ?: photo
-            val small = Bitmap.createScaledBitmap(photo, 192, 108, true)
-            val frosted = Glass.frostScene(photo, s.photoDim, s.shade, s.shadeStops)
+            val xmas = Xmas.on
+            val small = thumbOf(photo, xmas)
+            val frosted = Glass.frostScene(photo, s.photoDim, s.shade, s.shadeStops, xmas)
             val fgHw = fg?.let { it.copy(Bitmap.Config.HARDWARE, false) ?: it }
+            val shownNew = Shown(s, hw, fgHw, fill).also { if (xmas) soften(it) }
             post {
                 back?.let { if (it !== front) recycle(it) }
                 back = front
-                front = Shown(s, hw, fgHw, fill)
+                front = shownNew
+                if (frostT < 1f && frostAnim?.isRunning == true) frostAnim?.end()
                 thumb = small
                 // the glass: the new scene's frosted picture, crossfading with the old one
                 Glass.old = if (back == null) null else Glass.now
@@ -183,6 +235,7 @@ class SceneView(ctx: Context) : View(ctx) {
                 fadeTo(if (back == null) 1f else 0f)
                 onShown?.invoke(s)
                 invalidate()
+                if (xmas != Xmas.on) refrost()   // switched while this one was loading
             }
         }
     }
@@ -215,6 +268,8 @@ class SceneView(ctx: Context) : View(ctx) {
         val gliding = b != null && fadeT < 1f
         if (gliding) drawScene(c, b!!, 1f, glideFrom = b, glideTo = f)
         drawScene(c, f, if (b != null) fadeT else 1f, glideFrom = if (gliding) b else null, glideTo = if (gliding) f else null)
+        // Christmas: the haze on the window, over the scene and its clock
+        if (frostT > 0f) { hazeP.alpha = (255 * frostT).toInt(); dst.set(0f, 0f, width.toFloat(), height.toFloat()); c.drawBitmap(Xmas.haze, null, dst, hazeP) }
         // the scrim under Keep watching and the dock (app.css .theme-night .scrim)
         if (scrimP.shader == null) scrimP.shader = LinearGradient(0f, height * 0.6f, 0f, height.toFloat(), 0, 0x80000000.toInt(), Shader.TileMode.CLAMP)
         c.drawRect(0f, height * 0.6f, width.toFloat(), height.toFloat(), scrimP)
@@ -233,7 +288,10 @@ class SceneView(ctx: Context) : View(ctx) {
         val sc = s.scene
         photoP.alpha = (255 * a).toInt()
         photoP.colorFilter = if (dim < 1f) ColorMatrixColorFilter(ColorMatrix().apply { setScale(dim, dim, dim, 1f) }) else null
-        cover(s.photo); c.drawBitmap(s.photo, null, dst, photoP)
+        cover(s.photo)
+        val soft = s.soft?.takeIf { frostT > 0f }
+        if (soft == null || frostT < 1f) c.drawBitmap(s.photo, null, dst, photoP)
+        if (soft != null) { photoP.alpha = (255 * a * frostT).toInt(); c.drawBitmap(soft, null, dst, photoP) }
         sc.shade?.let { cols ->
             shadeP.shader = LinearGradient(0f, 0f, 0f, height.toFloat(), cols, sc.shadeStops, Shader.TileMode.CLAMP)
             shadeP.alpha = (255 * a).toInt(); c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), shadeP)
@@ -243,7 +301,13 @@ class SceneView(ctx: Context) : View(ctx) {
         val f = s.fg ?: return
         photoP.alpha = (255 * a).toInt()
         photoP.colorFilter = if (dim < 1f) ColorMatrixColorFilter(ColorMatrix().apply { setScale(dim, dim, dim, 1f) }) else null
-        cover(f); c.drawBitmap(f, null, dst, photoP)
+        cover(f)
+        val soft = s.softFg?.takeIf { frostT > 0f }
+        if (soft == null) c.drawBitmap(f, null, dst, photoP)
+        else {
+            if (frostT < 1f) { photoP.alpha = (255 * a * (1f - frostT)).toInt(); c.drawBitmap(f, null, dst, photoP) }
+            photoP.alpha = (255 * a * frostT).toInt(); c.drawBitmap(soft, null, dst, photoP)
+        }
     }
     /** A kept texture, drawn again only when what is in it changes. */
     private inline fun node(c: Canvas, n: RenderNode, key: String, old: String, a: Float, draw: (Canvas) -> Unit): String {
@@ -267,7 +331,7 @@ class SceneView(ctx: Context) : View(ctx) {
         // after the home has been away, and the glass would copy them half made (greyer, then
         // right a moment later)
         val hw = c.isHardwareAccelerated && width > 0 && !forGlass
-        if (hw) s.photoKey = node(c, s.photoNode, "$dim|$width", s.photoKey, a) { drawPhoto(it, s, 1f, dim) }
+        if (hw) s.photoKey = node(c, s.photoNode, "$dim|$width|$frostT|${s.soft != null}", s.photoKey, a) { drawPhoto(it, s, 1f, dim) }
         else drawPhoto(c, s, a, dim)
         if (time.isNotEmpty()) {
             // scene change: the outgoing and incoming clocks travel together, so it reads as one
@@ -283,7 +347,7 @@ class SceneView(ctx: Context) : View(ctx) {
             else drawClock(c, s, a, dim)
             c.restoreToCount(n)
         }
-        if (hw) { if (s.fg != null) s.fgKey = node(c, s.fgNode, "$dim|$width", s.fgKey, a) { drawFg(it, s, 1f, dim) } }
+        if (hw) { if (s.fg != null) s.fgKey = node(c, s.fgNode, "$dim|$width|$frostT|${s.softFg != null}", s.fgKey, a) { drawFg(it, s, 1f, dim) } }
         else drawFg(c, s, a, dim)
     }
     private fun cover(bmp: Bitmap) {

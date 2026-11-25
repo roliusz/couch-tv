@@ -34,6 +34,7 @@ class HomeActivity : Activity() {
     lateinit var date: DateLine
     lateinit var rain: RainLayer
     lateinit var snow: SnowLayer
+    lateinit var glow: XmasGlow
     lateinit var tab: SideTab
     lateinit var shelf: Shelf
     lateinit var dock: Dock
@@ -116,6 +117,8 @@ class HomeActivity : Activity() {
         root.addView(np, FrameLayout.LayoutParams(-2, -2, Gravity.END).apply { rightMargin = Ui.ri(5f); topMargin = Ui.ri(3.75f) })
         root.addView(battery, FrameLayout.LayoutParams(-2, -2, Gravity.END).apply { rightMargin = Ui.ri(5f); topMargin = Ui.ri(3.5f) })
         root.addView(npWide, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { leftMargin = Ui.ri(5f); rightMargin = Ui.ri(5f); bottomMargin = Ui.ri(2.875f) })
+        glow = XmasGlow(this)
+        root.addView(glow, mp, mp)   // over the cards and the dock, under what opens over them
         root.addView(panel, mp, mp)
         root.addView(side, mp, mp)
         root.addView(toast, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_HORIZONTAL).apply { topMargin = Ui.ri(3.75f) })
@@ -343,7 +346,7 @@ class HomeActivity : Activity() {
     /** Christmas mode's snow. adb: --ez snow true|false, whatever Home Assistant says, and
      *  --ef snowdeep 12, with that much already lying on the cards. */
     private fun askSnow() {
-        fun set(s: SnowSet?) { snow.want(s); shelf.snowSet(s, intent?.getFloatExtra("snowdeep", 0f) ?: 0f) }
+        fun set(s: SnowSet?) { scene.frost(s != null); glow.want(s != null); snow.want(s); shelf.snowSet(s, intent?.getFloatExtra("snowdeep", 0f) ?: 0f) }
         if (intent?.hasExtra("snow") == true) set(if (intent.getBooleanExtra("snow", false)) SnowSet(1f, 0.3f, 15f) else null)
         else ha.snowing { set(it) }
     }

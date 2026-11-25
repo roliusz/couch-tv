@@ -139,7 +139,7 @@ object Glass {
     var shelfOn = 0f
     /** A scene's frosted picture: the photo as the screen shows it (cover, dimmed, its shade and the
      *  scrim under the cards), at a quarter size, blurred (glass.css blur 10px) and saturated 150%. */
-    fun frostScene(photo: Bitmap, photoDim: Float, shade: IntArray?, stops: FloatArray?): Bitmap {
+    fun frostScene(photo: Bitmap, photoDim: Float, shade: IntArray?, stops: FloatArray?, xmas: Boolean = false): Bitmap {
         val w = Ui.width / 4; val h = Ui.height / 4
         val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888); val c = Canvas(out)
         val src = if (photo.config == Bitmap.Config.HARDWARE) photo.copy(Bitmap.Config.ARGB_8888, false) else photo
@@ -148,6 +148,8 @@ object Glass {
         if (photoDim < 1f) p.colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setScale(photoDim, photoDim, photoDim, 1f) })
         c.drawBitmap(src, null, RectF((w - bw) / 2, (h - bh) / 2, (w + bw) / 2, (h + bh) / 2), p)
         if (src !== photo) src.recycle()
+        // Christmas: the haze on the window, as the screen shows it
+        if (xmas) c.drawBitmap(Xmas.haze, null, RectF(0f, 0f, w.toFloat(), h.toFloat()), Paint(Paint.FILTER_BITMAP_FLAG))
         if (shade != null) c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), Paint().apply { shader = LinearGradient(0f, 0f, 0f, h.toFloat(), shade, stops, Shader.TileMode.CLAMP) })
         c.drawRect(0f, h * 0.6f, w.toFloat(), h.toFloat(), Paint().apply { shader = LinearGradient(0f, h * 0.6f, 0f, h.toFloat(), 0, 0x80000000.toInt(), Shader.TileMode.CLAMP) })
         return finish(out)
